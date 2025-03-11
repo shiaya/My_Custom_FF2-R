@@ -82,7 +82,7 @@ bool Attributes_OnBackstabBoss(int attacker, int victim, float &damage, int weap
 		SetEntPropFloat(attacker, Prop_Send, "m_flStealthNextChangeTime", GetGameTime() + 2.0);
 	}
 	
-	if(Attrib_FindOnWeapon(attacker, weapon, "sanguisuge"))
+	if(Attrib_FindOnWeapon(attacker, weapon, "sanguisuge") && !TF2_IsPlayerInCondition(attacker, TFCond_NoHealingDamageBuff))
 	{
 		int maxoverheal = TF2U_GetMaxOverheal(attacker) * 2;	// 250% overheal (from 200% overheal)
 		int health = GetClientHealth(attacker);
@@ -327,21 +327,24 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 					GetClientAbsOrigin(target, pos2);
 					if(GetVectorDistance(pos1, pos2, true) < 160000)
 					{
-						int maxhealth = SDKCall_GetMaxHealth(attacker);
-						int health = GetClientHealth(attacker);
-						if(health < maxhealth)
+						if(!TF2_IsPlayerInCondition(target, TFCond_NoHealingDamageBuff))
 						{
-							if(health+50 > maxhealth)
+							int maxhealth = SDKCall_GetMaxHealth(attacker);
+							int health = GetClientHealth(attacker);
+							if(health < maxhealth)
 							{
-								SetEntityHealth(target, maxhealth);
-								ApplyAllyHealEvent(attacker, target, maxhealth - health);
-								ApplySelfHealEvent(target, maxhealth - health);
-							}
-							else
-							{
-								SetEntityHealth(target, health + 50);
-								ApplyAllyHealEvent(attacker, target, 50);
-								ApplySelfHealEvent(target, 50);
+								if(health+50 > maxhealth)
+								{
+									SetEntityHealth(target, maxhealth);
+									ApplyAllyHealEvent(attacker, target, maxhealth - health);
+									ApplySelfHealEvent(target, maxhealth - health);
+								}
+								else
+								{
+									SetEntityHealth(target, health + 50);
+									ApplyAllyHealEvent(attacker, target, 50);
+									ApplySelfHealEvent(target, 50);
+								}
 							}
 						}
 						
@@ -421,7 +424,7 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 		}
 		
 		value = Attrib_FindOnWeapon(attacker, weapon, "heal on kill");
-		if(value)
+		if(value && !TF2_IsPlayerInCondition(attacker, TFCond_NoHealingDamageBuff))
 		{
 			int maxhealth = SDKCall_GetMaxHealth(attacker);
 			int health = GetClientHealth(attacker);
@@ -446,26 +449,28 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 			SetEntProp(attacker, Prop_Send, "m_iDecapitations", GetEntProp(attacker, Prop_Send, "m_iDecapitations")+1);
 			TF2_AddCondition(attacker, TFCond_DemoBuff);
 			SDKCall_SetSpeed(attacker);
-			
-			int maxoverheal = TF2U_GetMaxOverheal(attacker);
-			int health = GetClientHealth(attacker);
-			if(health < maxoverheal)
+			if(!TF2_IsPlayerInCondition(attacker, TFCond_NoHealingDamageBuff))
 			{
-				if(health + 15 > maxoverheal)
+				int maxoverheal = TF2U_GetMaxOverheal(attacker);
+				int health = GetClientHealth(attacker);
+				if(health < maxoverheal)
 				{
-					SetEntityHealth(attacker, maxoverheal);
-					ApplySelfHealEvent(attacker, maxoverheal - health);
-				}
-				else
-				{
-					SetEntityHealth(attacker, health + 15);
-					ApplySelfHealEvent(attacker, 15);
+					if(health + 15 > maxoverheal)
+					{
+						SetEntityHealth(attacker, maxoverheal);
+						ApplySelfHealEvent(attacker, maxoverheal - health);
+					}
+					else
+					{
+						SetEntityHealth(attacker, health + 15);
+						ApplySelfHealEvent(attacker, 15);
+					}
 				}
 			}
 		}
 		
 		value = Attrib_FindOnWeapon(attacker, weapon, "restore health on kill");
-		if(value)
+		if(value && !TF2_IsPlayerInCondition(attacker, TFCond_NoHealingDamageBuff))
 		{
 			int maxhealth = SDKCall_GetMaxHealth(attacker);
 			int health = GetClientHealth(attacker);

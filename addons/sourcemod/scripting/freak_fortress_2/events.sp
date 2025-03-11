@@ -612,7 +612,7 @@ static void Events_PlayerDeath(Event event, const char[] name, bool dontBroadcas
 				}
 				else if(Enabled)
 				{
-					int entity = MaxClients + 1;
+					/*int entity = MaxClients + 1;
 					while((entity = FindEntityByClassname(entity, "obj_sentrygun")) != -1)
 					{
 						if(GetEntPropEnt(entity, Prop_Send, "m_hBuilder") == victim && !GetEntProp(entity, Prop_Send, "m_bMiniBuilding"))
@@ -620,7 +620,7 @@ static void Events_PlayerDeath(Event event, const char[] name, bool dontBroadcas
 							FakeClientCommand(victim, "destroy 2");
 							AcceptEntityInput(entity, "kill");
 						}
-					}
+					}*/
 				}
 				
 				Client(victim).ResetByDeath();
