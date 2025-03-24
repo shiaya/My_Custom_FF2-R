@@ -86,6 +86,8 @@ bool Attributes_OnBackstabBoss(int attacker, int victim, float &damage, int weap
 	{
 		int maxoverheal = TF2U_GetMaxOverheal(attacker) * 2;	// 250% overheal (from 200% overheal)
 		int health = GetClientHealth(attacker);
+		if(TF2_IsPlayerInCondition(attacker, TFCond_HealingDebuff))
+			maxoverheal/=2;
 		if(health < maxoverheal)
 		{
 			SetEntityHealth(attacker, maxoverheal);
@@ -331,9 +333,10 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 						{
 							int maxhealth = SDKCall_GetMaxHealth(attacker);
 							int health = GetClientHealth(attacker);
+							int addHealth = TF2_IsPlayerInCondition(attacker, TFCond_HealingDebuff) ? 25 : 50;
 							if(health < maxhealth)
 							{
-								if(health+50 > maxhealth)
+								if(health+addHealth > maxhealth)
 								{
 									SetEntityHealth(target, maxhealth);
 									ApplyAllyHealEvent(attacker, target, maxhealth - health);
@@ -341,9 +344,9 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 								}
 								else
 								{
-									SetEntityHealth(target, health + 50);
-									ApplyAllyHealEvent(attacker, target, 50);
-									ApplySelfHealEvent(target, 50);
+									SetEntityHealth(target, health + addHealth);
+									ApplyAllyHealEvent(attacker, target, addHealth);
+									ApplySelfHealEvent(target, addHealth);
 								}
 							}
 						}
@@ -431,6 +434,8 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 			if(health < maxhealth)
 			{
 				int healing = RoundFloat(value);
+				if(TF2_IsPlayerInCondition(attacker, TFCond_HealingDebuff))
+					healing/=2;
 				if(health + healing > maxhealth)
 				{
 					SetEntityHealth(attacker, maxhealth);
@@ -453,17 +458,18 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 			{
 				int maxoverheal = TF2U_GetMaxOverheal(attacker);
 				int health = GetClientHealth(attacker);
+				int addHealth = TF2_IsPlayerInCondition(attacker, TFCond_HealingDebuff) ? 8 : 15;
 				if(health < maxoverheal)
 				{
-					if(health + 15 > maxoverheal)
+					if(health + addHealth > maxoverheal)
 					{
 						SetEntityHealth(attacker, maxoverheal);
 						ApplySelfHealEvent(attacker, maxoverheal - health);
 					}
 					else
 					{
-						SetEntityHealth(attacker, health + 15);
-						ApplySelfHealEvent(attacker, 15);
+						SetEntityHealth(attacker, health + addHealth);
+						ApplySelfHealEvent(attacker, addHealth);
 					}
 				}
 			}
@@ -479,6 +485,8 @@ void Attributes_OnHitBoss(int attacker, int victim, int inflictor, float fdamage
 			if(health < maxoverheal)
 			{
 				int healing = RoundFloat(float(maxhealth) * value / 200.0);
+				if(TF2_IsPlayerInCondition(attacker, TFCond_HealingDebuff))
+					healing/=2;
 				
 				if(health + healing > maxoverheal)
 				{
