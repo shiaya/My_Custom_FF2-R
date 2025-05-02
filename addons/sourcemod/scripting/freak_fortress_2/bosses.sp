@@ -1749,7 +1749,7 @@ void Bosses_CreateFromConfig(int client, ConfigMap cfg, int team, int leader = 0
 		}
 	}
 	
-	if(!Client(client).Minion && (!Client(client).Cfg.GetBool("nomods", value, false) || !value))
+	if(!Client(client).MinionType && (!Client(client).Cfg.GetBool("nomods", value, false) || !value))
 		Preference_ApplyDifficulty(client, leader ? leader : client, !active);
 }
 
@@ -1861,11 +1861,12 @@ static void EquipBoss(int client, bool weapons)
 	}
 	
 	static char buffer[PLATFORM_MAX_PATH];
-	if(Client(client).Cfg.Get("model", buffer, sizeof(buffer)))
-	{
+	if (Client(client).Cfg.Get("model", buffer, sizeof(buffer)))
 		SetVariantString(buffer);
-		AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
-	}
+	else
+		SetVariantString("");
+
+	AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
 	
 	if(weapons)
 	{
