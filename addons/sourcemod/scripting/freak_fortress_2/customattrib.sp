@@ -810,7 +810,7 @@ void CustomAttrib_OnWeaponSwitch(int client, int weapon)
 		{
 			case 1:
 			{
-				TF2_RemoveCondition(client, TF2_GetPlayerClass(client) == TFClass_Scout ? TFCond_Buffed : TFCond_CritCola);
+				TF2_RemoveCondition(client, (TF2_GetPlayerClass(client) == TFClass_Scout || TF2_GetPlayerClass(client) == TFClass_Heavy) ? TFCond_Buffed : TFCond_CritCola);
 			}
 			case 2:
 			{
@@ -824,7 +824,7 @@ void CustomAttrib_OnWeaponSwitch(int client, int weapon)
 		{
 			case 1:
 			{
-				TF2_AddCondition(client, TF2_GetPlayerClass(client) == TFClass_Scout ? TFCond_Buffed : TFCond_CritCola);
+				TF2_AddCondition(client, (TF2_GetPlayerClass(client) == TFClass_Scout || TF2_GetPlayerClass(client) == TFClass_Heavy) ? TFCond_Buffed : TFCond_CritCola);
 				HasCritGlow[client] = 1;
 			}
 			case 2:
