@@ -1,6 +1,4 @@
-#if defined IS_MAIN_FF2
 #tryinclude <tf_econ_dynamic>
-#endif
 #tryinclude <tf_custom_attributes>
 
 #pragma semicolon 1
@@ -9,8 +7,8 @@
 #define TFEY_LIBRARY	"tf2econdynamic"
 #define TCA_LIBRARY		"tf2custattr"
 
-#if !defined DEFAULT_VALUE_TEST
-#define DEFAULT_VALUE_TEST	-69420.69
+#if !defined CUSTOMATTRIBFF2_INCLUDED
+#define CUSTOMATTRIBFF2_INCLUDED	-69420.69
 #endif
 
 #if defined __tf_econ_dyn_included
@@ -31,6 +29,10 @@ void CustomAttrib_PluginLoad()
 	MarkNativeAsOptional("TF2CustAttr_GetFloat");
 	MarkNativeAsOptional("TF2CustAttr_SetString");
 	MarkNativeAsOptional("TF2CustAttr_GetString");
+	#endif
+	
+	#if defined IS_MAIN_FF2
+	#if defined __tf_econ_dyn_included
 	MarkNativeAsOptional("TF2EconDynAttribute.TF2EconDynAttribute");
 	MarkNativeAsOptional("TF2EconDynAttribute.SetClass");
 	MarkNativeAsOptional("TF2EconDynAttribute.SetName");
@@ -38,9 +40,17 @@ void CustomAttrib_PluginLoad()
 	MarkNativeAsOptional("TF2EconDynAttribute.SetCustom");
 	MarkNativeAsOptional("TF2EconDynAttribute.Register");
 	#endif
+	#endif
 }
 
 void CustomAttrib_PluginStart()
+{
+	#if defined __tf_custom_attributes_included
+	TCALoaded = LibraryExists(TCA_LIBRARY);
+	#endif
+}
+
+stock void CustomAttrib_AllPluginsLoaded()
 {
 	#if defined __tf_econ_dyn_included
 	TFEYLoaded = GetFeatureStatus(FeatureType_Native, "TF2EconDynAttribute.TF2EconDynAttribute") == FeatureStatus_Available;
@@ -50,10 +60,6 @@ void CustomAttrib_PluginStart()
 		AddAttributes();
 		#endif
 	}
-	#endif
-
-	#if defined __tf_custom_attributes_included
-	TCALoaded = LibraryExists(TCA_LIBRARY);
 	#endif
 }
 
@@ -132,34 +138,36 @@ void CustomAttrib_ApplyFromCfg(int entity, ConfigMap cfg)
 			if(TCALoaded)
 			{
 				TF2CustAttr_SetString(entity, key, attribute.data);
-				continue;
-			}
-			#endif
-
-		#if defined IS_MAIN_FF2
-			#if defined __tf_econ_dyn_included
-			if(TFEYLoaded)
-			{
-				Attrib_SetString(entity, key, attribute.data);
-				continue;
+				
+				#if defined __tf_econ_dyn_included
+				if(!TFEYLoaded)
+					continue;
+				#endif
 			}
 			#endif
 			
-			if(StrEqual(key, "damage vs bosses"))
+			#if defined __tf_econ_dyn_included
+			if(!TFEYLoaded)
 			{
-				Attrib_Set(entity, "damage bonus HIDDEN", StringToFloat(attribute.data));
-			}
-			else if(StrEqual(key, "mod crit type on bosses"))
-			{
-				Attrib_Set(entity, "crit vs burning players", 1.0);
-				Attrib_Set(entity, "crit vs non burning players", 1.0);
+				if(StrEqual(key, "damage vs bosses"))
+				{
+					Attrib_Set(entity, "damage bonus HIDDEN", StringToFloat(attribute.data));
+					continue;
+				}
+				else if(StrEqual(key, "mod crit type on bosses"))
+				{
+					Attrib_Set(entity, "crit vs burning players", 1.0);
+					Attrib_Set(entity, "crit vs non burning players", 1.0);
 
-				if(StringToInt(attribute.data) == 1)
-					Attrib_Set(entity, "crits_become_minicrits", 1.0);
+					if(StringToInt(attribute.data) == 1)
+						Attrib_Set(entity, "crits_become_minicrits", 1.0);
+					
+					continue;
+				}
 			}
-		#else
+			#endif
+			
 			Attrib_SetString(entity, key, attribute.data);
-		#endif
 		}
 	}
 	
@@ -281,8 +289,8 @@ stock bool CustomAttrib_Get(int weapon, const char[] name, float &value = 0.0)
 	#if defined __tf_custom_attributes_included
 	if(TCALoaded)
 	{
-		float result = TF2CustAttr_GetFloat(weapon, name, DEFAULT_VALUE_TEST);
-		if(result != DEFAULT_VALUE_TEST)
+		float result = TF2CustAttr_GetFloat(weapon, name, CUSTOMATTRIBFF2_INCLUDED);
+		if(result != CUSTOMATTRIBFF2_INCLUDED)
 		{
 			value = result;
 			return true;
@@ -928,7 +936,7 @@ static void ApplyRage(int victim, int attacker, float amount)
 void CustomAttrib_CalcIsAttackCritical(int client, int weapon)
 {
 	float damage;
-	if(CustomAttrib_Get(weapon, "melee sickle climb"))
+	if(CustomAttrib_Get(weapon, "melee sickle climb", damage))
 	{
 		float pos[3];
 		float ang[3];
@@ -947,7 +955,7 @@ void CustomAttrib_CalcIsAttackCritical(int client, int weapon)
 			{
 				if(vec[0] > -30.0)
 				{
-					TR_GetEndPosition(vec);
+					TR_GetEndPosition(vec, trace);
 
 					if(GetVectorDistance(pos, vec, true) < 10000.0)
 					{

@@ -347,9 +347,9 @@
 #include <tf2_stocks>
 #include <morecolors>
 #include <cfgmap>
-#include <ff2r>
 #undef REQUIRE_EXTENSIONS
 #undef REQUIRE_PLUGIN
+#include <ff2r>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -415,6 +415,7 @@ ConVar CvarTimeScale;
 #include "freak_fortress_2/customattrib.sp"
 #include "freak_fortress_2/econdata.sp"
 #include "freak_fortress_2/formula_parser.sp"
+#include "freak_fortress_2/subplugin.sp"
 #include "freak_fortress_2/tf2attributes.sp"
 #include "freak_fortress_2/tf2items.sp"
 #include "freak_fortress_2/tf2utils.sp"
@@ -426,7 +427,7 @@ public Plugin myinfo =
 	author		=	"Batfoxkid",
 	description	=	"Contains too much excitement!",
 	version		=	PLUGIN_VERSION,
-	url			=	"https://github.com/Batfoxkid/Freak-Fortress-2-Rewrite"
+	url		=	"https://github.com/Batfoxkid/Freak-Fortress-2-Rewrite"
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -505,7 +506,12 @@ public void OnPluginStart()
 	
 	AddCommandListener(OnKermitSewerSlide, "explode");
 	AddCommandListener(OnKermitSewerSlide, "kill");
-	
+
+	Subplugin_PluginStart();
+}
+
+void FF2R_PluginLoaded()
+{
 	for(int client = 1; client <= MaxClients; client++)
 	{
 		if(IsClientInGame(client))
@@ -555,6 +561,7 @@ public void OnLibraryAdded(const char[] name)
 {
 	Attrib_LibraryAdded(name);
 	CustomAttrib_LibraryAdded(name);
+	Subplugin_LibraryAdded(name);
 	TF2U_LibraryAdded(name);
 	TFED_LibraryAdded(name);
 	VScript_LibraryAdded(name);
@@ -564,6 +571,7 @@ public void OnLibraryRemoved(const char[] name)
 {
 	Attrib_LibraryRemoved(name);
 	CustomAttrib_LibraryRemoved(name);
+	Subplugin_LibraryRemoved(name);
 	TF2U_LibraryRemoved(name);
 	TFED_LibraryRemoved(name);
 	VScript_LibraryRemoved(name);
@@ -998,10 +1006,10 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 							
 							TeleportEntity(client, _, _, velocity);
 							
+							SetEntityFlags(client, GetEntityFlags(client) & ~FL_ONGROUND);
 							SetEntProp(client, Prop_Send, "m_bJumping", true);
 
 							SDKCall_SetJumpBlastState(client, TF_PLAYER_ENEMY_BLASTED_ME);
-							TF2_AddCondition(client, TFCond_BlastJumping, _, client);
 							
 							if(ability.GetString("slot", buffer, sizeof(buffer)))
 								FF2R_EmitBossSoundToAll("sound_ability", client, buffer, client, _, SNDLEVEL_TRAFFIC);
@@ -1020,7 +1028,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 					}
 				}
 				
-				if(!(buttons & IN_SCORE) && (hud || ability.GetFloat("hudin") < gameTime))
+				if(!(buttons & IN_SCORE) && (hud || ability.GetFloat("hudin") < gameTime) && GameRules_GetRoundState() != RoundState_TeamWin)
 				{
 					ability.SetFloat("hudin", gameTime + 0.09);
 					
@@ -1402,7 +1410,6 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 
 		int victims;
 		int[] victim = new int[MaxClients - 1];
-		SetVariantString(file);
 		for(int target = 1; target <= MaxClients; target++)
 		{
 			if(target != client && IsClientInGame(target) && IsPlayerAlive(target) && GetClientTeam(target) != team)
@@ -1413,6 +1420,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 				
 				delete OverlayTimer[target];
 
+				SetVariantString(file);
 				AcceptEntityInput(target, "SetScriptOverlayMaterial", target, target);
 				OverlayTimer[target] = CreateTimer(duration, Timer_RemoveOverlay, target);
 				
@@ -1893,14 +1901,6 @@ void OnRoundEnd(Event event, const char[] name, bool dontBroadcast)
 	{
 		if(IsClientInGame(client))
 		{
-			BossData boss = FF2R_GetBossData(client);
-			if(boss)
-			{
-				AbilityData ability = boss.GetAbility("special_mobility");
-				if(ability.IsMyPlugin())
-					ability.SetFloat("hudin", FAR_FUTURE);
-			}
-			
 			CloneOwner[client] = 0;
 			CloneIdle[client] = false;
 			CloneLowPrio[client] = false;
@@ -2261,7 +2261,6 @@ void Rage_TradeSpam(int client, ConfigData cfg, const char[] ability, int phase)
 
 	char temp[128];
 	FormatEx(temp, sizeof(temp), "%s%d", file, phase);
-	SetVariantString(temp);
 	for(int target = 1; target <= MaxClients; target++)
 	{
 		if(target != client && IsClientInGame(target) && IsPlayerAlive(target) && GetClientTeam(target) != team)
@@ -2272,6 +2271,7 @@ void Rage_TradeSpam(int client, ConfigData cfg, const char[] ability, int phase)
 			
 			delete OverlayTimer[target];
 
+			SetVariantString(temp);
 			AcceptEntityInput(target, "SetScriptOverlayMaterial", target, target);
 			
 			OverlayTimer[target] = CreateTimer(duration, Timer_RemoveOverlay, target);
@@ -3135,8 +3135,6 @@ void ConstrainDistance(const float[] startPoint, float[] endPoint, float distanc
 
 bool TF2_GetItem(int client, int &weapon, int &pos)
 {
-	//TODO: Find out if we need to check m_bDisguiseWeapon
-	
 	static int maxWeapons;
 	if(!maxWeapons)
 		maxWeapons = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
@@ -3150,7 +3148,12 @@ bool TF2_GetItem(int client, int &weapon, int &pos)
 		pos++;
 		
 		if(weapon != -1)
+		{
+			if(GetEntProp(weapon, Prop_Send, "m_bDisguiseWeapon"))
+				continue;
+			
 			return true;
+		}
 	}
 	return false;
 }

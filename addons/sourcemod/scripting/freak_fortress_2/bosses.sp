@@ -761,7 +761,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 					}
 					case Section_Sound:
 					{
-						bool bgm = (StrEqual(section, "sound_intromusic") || StrEqual(section, "sound_bgm"));
+						bool bgm = (StrEqual(section, "sound_intromusic") || StrEqual(section, "sound_bgm") || !StrContains(section, "sound_outtromusic"));
 						for(int a; a < entriessub; a++)
 						{
 							int length2 = snapsub.KeyBufferSize(a)+2;
@@ -1821,6 +1821,32 @@ static void EquipBoss(int client, bool weapons)
 		case 1:
 			Attrib_Set(client, "reduced_healing_from_medics", 0.0, _, true);
 	}
+
+	// Creator Community Sparkle Effect
+	static char buffer1[PLATFORM_MAX_PATH];
+	ConfigMap creator = Client(client).Cfg.GetSection("creator");
+	if(creator && GetClientAuthId(client, AuthId_SteamID64, buffer1, sizeof(buffer1)))
+	{
+		StringMapSnapshot snap = creator.Snapshot();
+
+		int entries = snap.Length;
+		for(i = 0; i < entries; i++)
+		{
+			int length = snap.KeyBufferSize(i)+1;
+			char[] key = new char[length];
+			snap.GetKey(i, key, length);
+
+			static char buffer2[64];
+			creator.Get(key, buffer2, sizeof(buffer2));
+			if(StrEqual(buffer1, buffer2))
+			{
+				Attrib_Set(client, "attach particle effect static", 4.0);
+				break;
+			}
+		}
+
+		delete snap;
+	}
 	
 	any class;
 	Client(client).Cfg.GetInt("class", class);
@@ -1860,12 +1886,10 @@ static void EquipBoss(int client, bool weapons)
 		}
 	}
 	
-	static char buffer[PLATFORM_MAX_PATH];
-	if (Client(client).Cfg.Get("model", buffer, sizeof(buffer)))
-		SetVariantString(buffer);
-	else
-		SetVariantString("");
-
+	if(!Client(client).Cfg.Get("model", buffer1, sizeof(buffer1)))
+		buffer1[0] = 0;
+	
+	SetVariantString(buffer1);
 	AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
 	
 	if(weapons)
@@ -2008,6 +2032,7 @@ void Bosses_ClientDisconnect(int client)
 	Client(client).Index = -1;
 	if(Client(client).IsBoss)
 	{
+		Ranking_BossRemoved(client, true);
 		DHook_UnhookBoss(client);
 		Forward_OnBossRemoved(client);
 		DeleteCfg(Client(client).Cfg);
@@ -2036,6 +2061,7 @@ void Bosses_Remove(int client)
 	Client(client).Index = -1;
 	if(Client(client).IsBoss)
 	{
+		Ranking_BossRemoved(client, false);
 		DHook_UnhookBoss(client);
 		Forward_OnBossRemoved(client);
 		
@@ -2065,6 +2091,7 @@ void Bosses_Remove(int client)
 		SetVariantString(NULL_STRING);
 		AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
 		
+		Attrib_Remove(client, "attach particle effect static");
 		Attrib_Remove(client, "major move speed bonus");
 		Attrib_Remove(client, "max health additive bonus");
 		Attrib_Remove(client, "healing received penalty");
@@ -2497,19 +2524,28 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 				case KeyValType_Section:
 				{
 					if(required[0])
-					{	
+					{
 						if(!val.cfg.Get("key", buffer, sizeof(buffer)))
-							continue;
-						
+						{
+							if(!number)
+								continue;
+							
+							strcopy(buffer, sizeof(buffer), "0");
+						}
+
 						if(number)
 						{
 							if(num != StringToInt(buffer))
 								continue;
 						}
-						else if(StrContains(required, buffer, false) != 0)
+						else if(StrContains(required, buffer, false) == -1)
 						{
 							continue;
 						}
+					}
+					else if(val.cfg.Get("key", buffer, sizeof(buffer)))
+					{
+						continue;
 					}
 				}
 				case KeyValType_Value:
@@ -2525,17 +2561,26 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 							strcopy(buffer, sizeof(buffer), val.data);
 							
 							if(!buffer[0])
+							{
+								if(!number)
+									continue;
+								
 								strcopy(buffer, sizeof(buffer), "0");
+							}
 							
 							if(number)
 							{
 								if(num != StringToInt(buffer))
 									continue;
 							}
-							else if(StrContains(required, buffer, false) != 0)
+							else if(StrContains(required, buffer, false) == -1)
 							{
 								continue;
 							}
+						}
+						else if(val.data[0])
+						{
+							continue;
 						}
 					}
 					else	// "1"	"example.mp3"
@@ -2558,7 +2603,7 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 								if(num != StringToInt(buffer))
 									continue;
 							}
-							else if(StrContains(required, buffer, false) != 0)
+							else if(StrContains(required, buffer, false) == -1)
 							{
 								continue;
 							}

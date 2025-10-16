@@ -92,12 +92,12 @@
 	"Boss Rage Charge"
 	{
 		"#format"	"{1:d}"
-		"en"		"RAGE is not ready. {1}%%"
+		"en"		"RAGE is not ready. {1}％"
 	}
 	"Boss Rage Ready"
 	{
 		"#format"	"{1:d}"
-		"en"		"RAGE is ready! {1}%%"
+		"en"		"RAGE is ready! {1}％"
 	}
 	"Boss Rage Medic"
 	{
@@ -111,7 +111,7 @@
 	"Boss Mobility Charge"
 	{
 		"#format"	"{1:d}"
-		"en"		"Mobility is not ready. {1}%%"
+		"en"		"Mobility is not ready. {1}％"
 	}
 	"Boss Jump Time"
 	{
@@ -121,12 +121,12 @@
 	"Boss Jump Charge"
 	{
 		"#format"	"{1:d}"
-		"en"		"Super Jump is not ready. {1}%%"
+		"en"		"Super Jump is not ready. {1}％"
 	}
 	"Boss Jump Ready"
 	{
 		"#format"	"{1:d}"
-		"en"		"Super Jump is ready. {1}%%"
+		"en"		"Super Jump is ready. {1}％"
 	}
 	"Boss Jump Look"
 	{
@@ -140,12 +140,12 @@
 	"Boss Tele Charge"
 	{
 		"#format"	"{1:d}"
-		"en"		"Teleport is not ready. {1}%%"
+		"en"		"Teleport is not ready. {1}％"
 	}
 	"Boss Tele Ready"
 	{
 		"#format"	"{1:d}"
-		"en"		"Teleport is ready. {1}%%"
+		"en"		"Teleport is ready. {1}％"
 	}
 	"Boss Tele Look"
 	{
@@ -204,7 +204,7 @@
 	"Sapper Cooldown"
 	{
 		"#format"	"{1:d}"
-		"en"		"Sapper: {1}%%"
+		"en"		"Sapper: {1}％"
 	}
 	
 	"Preference Updated"
@@ -499,6 +499,14 @@
 		"#format"	"{1:d}"
 		"en"		"Blacklist is full with {1} bosses."
 	}
+	"View Creators"
+	{
+		"en"		"View Creators"
+	}
+	"Created By"
+	{
+		"en"		"Created By"
+	}
 	
 	"Now Playing"
 	{
@@ -583,6 +591,47 @@
 	"Unknown Difficulty"
 	{
 		"en"		"This difficulty does not exist."
+	}
+
+	"Current Rank"
+	{
+		"#format"	"{1:d}"
+		"en"		"Current Rank: {1}"
+	}
+	"Boss Rank"
+	{
+		"#format"	"{1:s},{2:d}"
+		"en"		"{1} Rank: {2}"
+	}
+	"As Rank"
+	{
+		"#format"	"{1:d}"
+		"en"		"Rank {1}"
+	}
+	"Rank Debuff"
+	{
+		"#format"	"{1:d}"
+		"en"		"({1}％ HP)"
+	}
+	"Boss Rank Increased"
+	{
+		"#format"	"{1:s},{2:d}"
+		"en"		"{teamcolor}{1} {default}rank increased to {olive}{2}{default}!"
+	}
+	"Boss Rank Decreased"
+	{
+		"#format"	"{1:s},{2:d}"
+		"en"		"{teamcolor}{1} {default}rank decreased to {olive}{2}{default}!"
+	}
+	"Boss Rank Decreased Score"
+	{
+		"#format"	"{1:s},{2:d},{3:d},{4:d}"
+		"en"		"{teamcolor}{1} {default}rank decreased to {olive}{2}{default}! ({3} of {4} kills)"
+	}
+	"Boss Rank Saved Score"
+	{
+		"#format"	"{1:s},{2:d},{3:d},{4:d}"
+		"en"		"{teamcolor}{1} {default}rank kept at {olive}{2}{default}! ({3} of {4} kills)"
 	}
 	
 	"Boss Solo Rage"

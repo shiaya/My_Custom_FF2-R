@@ -34,6 +34,9 @@ SectionType GetSectionType(const char[] buffer)
 	if(StrEqual(buffer, "download"))
 		return Section_Download;
 
+	if(StrEqual(buffer, "creator"))
+		return Section_Creator;
+
 	if(!StrContains(buffer, "filenet"))
 		return Section_FileNet;
 
@@ -664,8 +667,6 @@ void TF2_RefillMaxAmmo(int client)
 
 bool TF2_GetItem(int client, int &weapon, int &pos)
 {
-	//TODO: Find out if we need to check m_bDisguiseWeapon
-	
 	static int maxWeapons;
 	if(!maxWeapons)
 		maxWeapons = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
@@ -679,7 +680,12 @@ bool TF2_GetItem(int client, int &weapon, int &pos)
 		pos++;
 		
 		if(weapon != -1)
+		{
+			if(GetEntProp(weapon, Prop_Send, "m_bDisguiseWeapon"))
+				continue;
+			
 			return true;
+		}
 	}
 	return false;
 }
@@ -915,6 +921,19 @@ void ImportValuesIntoConfigMap(ConfigMap from, ConfigMap to)
 	}
 
 	delete snap;
+}
+
+void CreateFade(int client, int duration = 2000, int red = 255, int green = 255, int blue = 255, int alpha = 255)
+{
+	BfWrite bf = UserMessageToBfWrite(StartMessageOne("Fade", client));
+	bf.WriteShort(duration);
+	bf.WriteShort(0);
+	bf.WriteShort(0x0001);
+	bf.WriteByte(red);
+	bf.WriteByte(green);
+	bf.WriteByte(blue);
+	bf.WriteByte(alpha);
+	EndMessage();
 }
 
 void FPrintToChat(int client, const char[] message, any ...)

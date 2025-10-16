@@ -86,6 +86,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 	else
 	{
 		DHook_EntityCreated(entity, classname);
+		Dome_EntityCreated(entity, classname);
 		Weapons_EntityCreated(entity, classname);
 	}
 }
@@ -156,7 +157,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					
 					float gameTime = GetGameTime();
 					
-					damage = Client(victim).MinionType ? 500.0 : 750.0;	// 2250 max damage
+					damage = 500.0;	// 1500 max damage
 					damagetype |= DMG_PREVENT_PHYSICS_FORCE|DMG_CRIT;
 					critType = CritType_Crit;
 					

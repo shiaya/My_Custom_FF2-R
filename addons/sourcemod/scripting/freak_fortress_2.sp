@@ -17,9 +17,9 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION			"1.2"
+#define PLUGIN_VERSION		"1.2"
 #define PLUGIN_VERSION_REVISION	"custom"
-#define PLUGIN_VERSION_FULL		"Rewrite " ... PLUGIN_VERSION ... "." ... PLUGIN_VERSION_REVISION
+#define PLUGIN_VERSION_FULL	"Rewrite " ... PLUGIN_VERSION ... "." ... PLUGIN_VERSION_REVISION
 #define IS_MAIN_FF2
 
 #define FILE_CHARACTERS	"data/freak_fortress_2/characters.cfg"
@@ -27,15 +27,15 @@
 
 #define GITHUB_URL	"github.com/Batfoxkid/Freak-Fortress-2-Rewrite"
 
-#define FAR_FUTURE		100000000.0
-#define MAXENTITIES		2048
+#define FAR_FUTURE	100000000.0
+#define MAXENTITIES	2048
 #define MAXTF2PLAYERS	MAXPLAYERS+1
 
 #define TFTeam_Unassigned	0
 #define TFTeam_Spectator	1
-#define TFTeam_Red			2
-#define TFTeam_Blue			3
-#define TFTeam_MAX			4
+#define TFTeam_Red		2
+#define TFTeam_Blue		3
+#define TFTeam_MAX		4
 
 enum TFStatType_t
 {
@@ -121,7 +121,8 @@ enum SectionType
 	Section_Download,	// download
 	Section_Model,		// mod_download
 	Section_Material,	// mat_download
-	Section_FileNet		// filenetwork
+	Section_FileNet,	// filenetwork
+	Section_Creator		// creator
 };
 
 enum struct SoundEnum
@@ -187,11 +188,16 @@ enum
 	SpecTeam,
 	CaptureTime,
 	CaptureAlive,
+	CaptureDome,
+	CaptureDomeTime,
 	HealthBar,
 	RefreshDmg,
 	RefreshTime,
 	DisguiseModels,
 	PlayerGlow,
+	RankingStats,
+	RankingLose,
+	RankingStyle,
 	BossSewer,
 	Telefrags,
 	StreakDamage,
@@ -205,6 +211,7 @@ enum
 	FriendlyFire,
 	MovementFreeze,
 	PreroundTime,
+	BonusroundTime,
 	Tournament,
 	WaitingTime,
 	
@@ -233,6 +240,7 @@ Handle ThisPlugin;
 #include "freak_fortress_2/customattrib.sp"
 #include "freak_fortress_2/database.sp"
 #include "freak_fortress_2/dhooks.sp"
+#include "freak_fortress_2/dome.sp"
 #include "freak_fortress_2/econdata.sp"
 #include "freak_fortress_2/events.sp"
 #include "freak_fortress_2/filenetwork.sp"
@@ -246,6 +254,7 @@ Handle ThisPlugin;
 #include "freak_fortress_2/natives.sp"
 #include "freak_fortress_2/natives_old.sp"
 #include "freak_fortress_2/preference.sp"
+#include "freak_fortress_2/ranking.sp"
 #include "freak_fortress_2/sdkcalls.sp"
 #include "freak_fortress_2/sdkhooks.sp"
 #include "freak_fortress_2/steamworks.sp"
@@ -262,7 +271,7 @@ public Plugin myinfo =
 	author		=	"Batfoxkid based on the original done by many others",
 	description	=	"It's like Christmas Morning",
 	version		=	PLUGIN_VERSION ... "." ... PLUGIN_VERSION_REVISION,
-	url			=	"https://forums.alliedmods.net/forumdisplay.php?f=154"
+	url		=	"https://forums.alliedmods.net/forumdisplay.php?f=154"
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -304,6 +313,7 @@ public void OnPluginStart()
 	CustomAttrib_PluginStart();
 	Database_PluginStart();
 	DHook_PluginStart();
+	Dome_PluginStart();
 	Events_PluginStart();
 	FileNet_PluginStart();
 	Gamemode_PluginStart();
@@ -328,6 +338,7 @@ public void OnPluginStart()
 public void OnAllPluginsLoaded()
 {
 	Configs_AllPluginsLoaded();
+	CustomAttrib_AllPluginsLoaded();
 
 	if(!Attrib_Loaded() && !VScript_Loaded())
 		LogError("[!!!] No attribute manager is loaded, make sure either TF2Attributes or VScript is loaded on the server and compiled into FF2");
@@ -348,6 +359,7 @@ public void OnMapStart()
 {
 	Configs_MapStart();
 	DHook_MapStart();
+	Dome_MapStart();
 	Gamemode_MapStart();
 	Teuton_MapStart();
 }

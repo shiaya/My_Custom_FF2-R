@@ -94,9 +94,9 @@
 #include <morecolors>
 //#include <adt_trie_sort>
 #include <cfgmap>
-#include <ff2r>
 #undef REQUIRE_EXTENSIONS
 #undef REQUIRE_PLUGIN
+#include <ff2r>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -153,6 +153,20 @@ static const char LoopingSounds[][] =
 	""
 };
 
+static const char LoopingRawSounds[][] =
+{
+	"mvm/sentrybuster/mvm_sentrybuster_loop.wav",
+	"mvm/giant_scout/giant_scout_loop.wav",
+	"",
+	"mvm/giant_soldier/giant_soldier_loop.wav",
+	"mvm/giant_demoman/giant_demoman_loop.wav",
+	"",
+	")mvm/giant_heavy/giant_heavy_loop.wav",
+	"mvm/giant_pyro/giant_pyro_loop.wav",
+	"",
+	""
+};
+
 native void FF2_SetClientGlow(int client, float add, float set=-1.0);
 
 Handle SDKEquipWearable;
@@ -183,6 +197,7 @@ ArrayList AnnounceList;
 
 #include "freak_fortress_2/econdata.sp"
 #include "freak_fortress_2/formula_parser.sp"
+#include "freak_fortress_2/subplugin.sp"
 #include "freak_fortress_2/tf2attributes.sp"
 #include "freak_fortress_2/tf2utils.sp"
 #include "freak_fortress_2/vscript.sp"
@@ -193,7 +208,7 @@ public Plugin myinfo =
 	author		=	"Batfoxkid",
 	description	=	"I must I must I must",
 	version		=	PLUGIN_VERSION,
-	url			=	"https://github.com/Batfoxkid/Freak-Fortress-2-Rewrite"
+	url		=	"https://github.com/Batfoxkid/Freak-Fortress-2-Rewrite"
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -239,9 +254,11 @@ public void OnPluginStart()
 	HookEvent("post_inventory_application", OnInventoryApplication, EventHookMode_Post);
 	HookEvent("teamplay_flag_event", OnFlagEvent, EventHookMode_Pre);
 	HookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_Post);
+
+	Subplugin_PluginStart();
 }
 
-public void OnAllPluginsLoaded()
+void FF2R_PluginLoaded()
 {
 	CvarDebug = FindConVar("ff2_debug");
 	
@@ -571,6 +588,7 @@ public void FF2R_OnBossModifier(int client, ConfigData cfg)
 public void OnLibraryAdded(const char[] name)
 {
 	Attrib_LibraryAdded(name);
+	Subplugin_LibraryAdded(name);
 	TF2U_LibraryAdded(name);
 	TFED_LibraryAdded(name);
 	VScript_LibraryAdded(name);
@@ -579,6 +597,7 @@ public void OnLibraryAdded(const char[] name)
 public void OnLibraryRemoved(const char[] name)
 {
 	Attrib_LibraryRemoved(name);
+	Subplugin_LibraryRemoved(name);
 	TF2U_LibraryRemoved(name);
 	TFED_LibraryRemoved(name);
 	VScript_LibraryRemoved(name);
@@ -625,6 +644,7 @@ public void TF2_OnConditionRemoved(int client, TFCond condition)
 					
 					float pos[3];
 					GetEntPropVector(entity, Prop_Data, "m_vecOrigin", pos);
+					pos[2] += 8.0;
 					TeleportEntity(client, pos);
 					SetEntProp(client, Prop_Send, "m_bDucked", 1);
 					SetEntityFlags(client, GetEntityFlags(client)|FL_DUCKING);
@@ -652,9 +672,6 @@ Action OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 	int victim = GetClientOfUserId(userid);
 	if(victim)
 	{
-		if(RobotSounds[victim])
-			RequestFrame(RemoveRagdollFrame, userid);
-		
 		if(RobotSounds[victim] == 2)
 		{
 			if(TF2_GetPlayerClass(victim) == TFClass_Heavy)
@@ -809,6 +826,9 @@ void OnRoundEnd(Event event, const char[] name, bool dontBroadcast)
 	// Explode the bomb on win
 	if(event && event.GetInt("winreason") == 1 && IsValidEntity(BombRef) && BombCarrier)
 	{
+		Attrib_Remove(BombCarrier, "move speed penalty");
+		Attrib_Remove(BombCarrier, "increase player capture value");
+
 		float pos[3];
 		GetEntPropVector(BombCarrier, Prop_Send, "m_vecOrigin", pos);
 		TE_Particle("mvm_hatch_destroy", pos);
@@ -1201,17 +1221,15 @@ Action Timer_BombThink(Handle timer)
 				{
 					GetEntPropVector(target, Prop_Send, "m_vecOrigin", pos2);
 					if(GetVectorDistance(pos1, pos2, true) < 90000.0)
-					{
 						TF2_AddCondition(target, TFCond_DefenseBuffNoCritBlock, 1.1);
-
-						if(BombLevel > 1)
-							TF2_AddCondition(target, TFCond_HalloweenQuickHeal, 1.1);
-
-						if(BombLevel > 2)
-							TF2_AddCondition(target, TFCond_HalloweenCritCandy, 1.1);
-					}
 				}
 			}
+
+			if(BombLevel > 1)
+				TF2_AddCondition(BombCarrier, TFCond_HalloweenQuickHeal, 1.1);
+
+			if(BombLevel > 2)
+				TF2_AddCondition(BombCarrier, TFCond_HalloweenCritCandy, 1.1);
 		}
 	}
 	return Plugin_Continue;
@@ -1253,8 +1271,7 @@ void StopRobotSound(int client)
 
 	if(PlayingRobotLoop[client] != -1)
 	{
-		EmitGameSoundToAll(LoopingSounds[PlayingRobotLoop[client]], client, SND_STOPLOOPING);
-		EmitGameSoundToAll(LoopingSounds[PlayingRobotLoop[client]], client, SND_STOPLOOPING);
+		StopSound(client, SNDCHAN_STATIC, LoopingRawSounds[PlayingRobotLoop[client]]);
 		PlayingRobotLoop[client] = -1;
 	}
 }
@@ -1461,6 +1478,7 @@ Action SentryBusterExplode(Handle timer, int userid)
 
 			TE_Particle("fluidSmokeExpl_ring_mvm", pos);
 			ForcePlayerSuicide(client);
+			RequestFrame(RemoveRagdollFrame, userid);
 		}
 	}
 	return Plugin_Continue;
@@ -1884,8 +1902,6 @@ stock int SDKCall_GetMaxHealth(int client)
 
 bool TF2_GetItem(int client, int &weapon, int &pos)
 {
-	//TODO: Find out if we need to check m_bDisguiseWeapon
-	
 	static int maxWeapons;
 	if(!maxWeapons)
 		maxWeapons = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
@@ -1899,7 +1915,12 @@ bool TF2_GetItem(int client, int &weapon, int &pos)
 		pos++;
 		
 		if(weapon != -1)
+		{
+			if(GetEntProp(weapon, Prop_Send, "m_bDisguiseWeapon"))
+				continue;
+			
 			return true;
+		}
 	}
 	return false;
 }
