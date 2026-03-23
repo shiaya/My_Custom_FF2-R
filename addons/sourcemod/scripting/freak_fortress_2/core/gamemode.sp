@@ -1143,7 +1143,7 @@ void Gamemode_PlayerRunCmd(int client, int buttons)
 		{
 			int team = GetClientTeam(client);
 			if(PlayersAlive[team] < 3)
-				TF2Tools_AddCondition(client, (TF2_GetPlayerClass(client) == TFClass_Scout || TF2_GetPlayerClass(client) == TFClass_Heavy ? TFCond_Buffed : TFCond_CritCola, 0.5);
+				TF2Tools_AddCondition(client, (TF2_GetPlayerClass(client) == TFClass_Scout || TF2_GetPlayerClass(client) == TFClass_Heavy) ? TFCond_Buffed : TFCond_CritCola, 0.5);
 			
 			if(PlayersAlive[team] < 2) 
 			{
