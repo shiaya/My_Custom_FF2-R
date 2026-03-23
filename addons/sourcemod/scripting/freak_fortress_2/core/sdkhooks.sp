@@ -134,8 +134,8 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 			if(damagetype == DMG_GENERIC && Client(victim).RPSHit == attacker)
 			{
 				Client(victim).RPSHit = 0;
-				damage = float(Client(victim).RPSDamage);
 				critType = CritType_None;
+				SetEntityHealth(victim, 1);
 				return Plugin_Changed;
 			}
 			
@@ -189,18 +189,18 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					{
 						if(!Client(victim).MinionType)
 						{
-							EmitSoundToClient(victim, "player/spy_shield_break.wav", _, _, _, _, 0.7);
-							EmitSoundToClient(attacker, "player/spy_shield_break.wav", _, _, _, _, 0.7);
+							EmitSoundToClient(victim, "player/spy_shield_break.wav", .volume = 0.7);
+							EmitSoundToClient(attacker, "player/spy_shield_break.wav", .volume = 0.7);
 						}
 						
 						if(!MultiBosses())
 						{
-							if(!Client(attacker).IsBoss || !Bosses_PlaySoundToAll(victim, "sound_stabbed_boss", _, _, _, _, _, 2.0))
-								Bosses_PlaySoundToAll(victim, "sound_stabbed", _, _, _, _, _, 2.0);
+							if(!Client(attacker).IsBoss || !Bosses_PlaySoundToAll(victim, "sound_stabbed_boss", .volume = SNDVOL_BOSS))
+								Bosses_PlaySoundToAll(victim, "sound_stabbed", .volume = SNDVOL_BOSS);
 						}
-						else if(!Client(attacker).IsBoss || !Bosses_PlaySoundToAll(victim, "sound_stabbed_boss", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, 2.0))
+						else if(!Client(attacker).IsBoss || !Bosses_PlaySoundToAll(victim, "sound_stabbed_boss", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, SNDVOL_BOSS))
 						{
-							Bosses_PlaySoundToAll(victim, "sound_stabbed", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, 2.0);
+							Bosses_PlaySoundToAll(victim, "sound_stabbed", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, SNDVOL_BOSS);
 						}
 					}
 					
@@ -289,11 +289,11 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					
 					if(MultiBosses())
 					{
-						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, 2.0);
+						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, SNDVOL_BOSS);
 					}
 					else
 					{
-						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, _, _, _, _, 2.0);
+						Bosses_PlaySoundToAll(victim, "sound_telefraged", .volume = SNDVOL_BOSS);
 					}
 					return Plugin_Changed;
 				}
@@ -301,6 +301,9 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 			
 			if(critType == CritType_None && (damagetype & DMG_CRIT))
 				critType = CritType_Crit;
+			
+			if(!OTDLoaded && critType == CritType_MiniCrit)
+				TF2Tools_AddCondition(attacker, TFCond_Buffed, 0.001);
 			
 			if(Client(attacker).IsBoss)
 			{
@@ -352,7 +355,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 			if(melee && SDKCall_CheckBlockBackstab(victim, attacker))
 			{
 				if(TF2_IsPlayerInCondition(victim, TFCond_RuneResist))
-					TF2_RemoveCondition(victim, TFCond_RuneResist);
+					TF2Tools_RemoveCondition(victim, TFCond_RuneResist);
 				
 				float pos[3];
 				GetClientAbsOrigin(victim, pos);
@@ -360,13 +363,13 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 				
 				EmitGameSoundToAll("Player.Spy_Shield_Break", victim, _, victim, pos);
 				
-				TF2_RemoveCondition(victim, TFCond_Zoomed);
+				TF2Tools_RemoveCondition(victim, TFCond_Zoomed);
 				
 				int entity = -1;
 				while((entity=FindEntityByClassname(entity, "tf_wearable_demoshield")) != -1)
 				{
 					if(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") == victim && !GetEntProp(entity, Prop_Send, "m_bDisguiseWearable"))
-						TF2_RemoveWearable(victim, entity);
+						TF2Tools_RemoveWearable(victim, entity);
 				}
 				
 				damage = 0.0;
@@ -387,7 +390,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 				changed = true;
 			}
 			
-			if(!Attrib_FindOnWeapon(attacker, weapon, "dmg pierces resists absorbs"))
+			if(!Attrib_FindOnWeapon(attacker, weapon, "dmg pierces resists absorbs", 797))
 			{
 				if(TF2_IsPlayerInCondition(victim, TFCond_Disguised))
 				{
@@ -485,6 +488,9 @@ static Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char
 			
 			if(found || Bosses_GetRandomSound(client, "catch_replace", sound, sample) || Bosses_GetRandomSound(client, "catch_phrase", sound))
 			{
+				if(!sound.Sound[0])
+					return Plugin_Stop;
+				
 				int[] clients2 = new int[numClients];
 				int amount;
 				
@@ -500,7 +506,7 @@ static Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char
 				
 				numClients = amount;
 				
-				if(sound.Entity == SOUND_FROM_LOCAL_PLAYER)
+				if(sound.Entity < 0)
 					sound.Entity = entity;
 				
 				int count = RoundToCeil(sound.Volume);
@@ -516,7 +522,7 @@ static Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char
 				strcopy(sample, sizeof(sample), sound.Sound);
 				
 				Client(entity).Speaking = true;
-				for(int i; i < count; i++)
+				for(int i = 1; i < count; i++)
 				{
 					EmitSound(clients, numClients, sample, entity, channel, level, flags, volume, pitch);
 				}

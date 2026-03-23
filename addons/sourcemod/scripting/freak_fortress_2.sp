@@ -5,7 +5,7 @@
 
 #include <sourcemod>
 #include <sdkhooks>
-#include <tf2_stocks>
+#include <sdktools>
 #include <clientprefs>
 #include <adt_trie_sort>
 #include <cfgmap>
@@ -28,86 +28,11 @@
 #define GITHUB_URL	"github.com/Batfoxkid/Freak-Fortress-2-Rewrite"
 
 #define FAR_FUTURE	100000000.0
-#define MAXENTITIES	2048
 #define MAXTF2PLAYERS	MAXPLAYERS+1
 
-#define TFTeam_Unassigned	0
-#define TFTeam_Spectator	1
-#define TFTeam_Red		2
-#define TFTeam_Blue		3
-#define TFTeam_MAX		4
+#define SNDVOL_BOSS	2.0
 
-enum TFStatType_t
-{
-	TFSTAT_UNDEFINED = 0,
-	TFSTAT_SHOTS_HIT,
-	TFSTAT_SHOTS_FIRED,
-	TFSTAT_KILLS,
-	TFSTAT_DEATHS,
-	TFSTAT_DAMAGE,
-	TFSTAT_CAPTURES,
-	TFSTAT_DEFENSES,
-	TFSTAT_DOMINATIONS,
-	TFSTAT_REVENGE,
-	TFSTAT_POINTSSCORED,
-	TFSTAT_BUILDINGSDESTROYED,
-	TFSTAT_HEADSHOTS,
-	TFSTAT_PLAYTIME,
-	TFSTAT_HEALING,
-	TFSTAT_INVULNS,
-	TFSTAT_KILLASSISTS,
-	TFSTAT_BACKSTABS,
-	TFSTAT_HEALTHLEACHED,
-	TFSTAT_BUILDINGSBUILT,
-	TFSTAT_MAXSENTRYKILLS,
-	TFSTAT_TELEPORTS,
-	TFSTAT_FIREDAMAGE,
-	TFSTAT_BONUS_POINTS,
-	TFSTAT_BLASTDAMAGE,
-	TFSTAT_DAMAGETAKEN,
-	TFSTAT_HEALTHKITS,
-	TFSTAT_AMMOKITS,
-	TFSTAT_CLASSCHANGES,
-	TFSTAT_CRITS,
-	TFSTAT_SUICIDES,
-	TFSTAT_CURRENCY_COLLECTED,
-	TFSTAT_DAMAGE_ASSIST,
-	TFSTAT_HEALING_ASSIST,
-	TFSTAT_DAMAGE_BOSS,
-	TFSTAT_DAMAGE_BLOCKED,
-	TFSTAT_DAMAGE_RANGED,
-	TFSTAT_DAMAGE_RANGED_CRIT_RANDOM,
-	TFSTAT_DAMAGE_RANGED_CRIT_BOOSTED,
-	TFSTAT_REVIVED,
-	TFSTAT_THROWABLEHIT,
-	TFSTAT_THROWABLEKILL,
-	TFSTAT_KILLSTREAK_MAX,
-	TFSTAT_KILLS_RUNECARRIER,
-	TFSTAT_FLAGRETURNS,
-	TFSTAT_TOTAL
-};
-
-enum
-{
-	WINREASON_NONE = 0,
-	WINREASON_ALL_POINTS_CAPTURED,
-	WINREASON_OPPONENTS_DEAD,
-	WINREASON_FLAG_CAPTURE_LIMIT,
-	WINREASON_DEFEND_UNTIL_TIME_LIMIT,
-	WINREASON_STALEMATE,
-	WINREASON_TIMELIMIT,
-	WINREASON_WINLIMIT,
-	WINREASON_WINDIFFLIMIT,
-	WINREASON_RD_REACTOR_CAPTURED,
-	WINREASON_RD_CORES_COLLECTED,
-	WINREASON_RD_REACTOR_RETURNED,
-	WINREASON_PD_POINTS,
-	WINREASON_SCORED,
-	WINREASON_STOPWATCH_WATCHING_ROUNDS,
-	WINREASON_STOPWATCH_WATCHING_FINAL_ROUND,
-	WINREASON_STOPWATCH_PLAYING_ROUNDS,
-	WINREASON_CUSTOM_OUT_OF_TIME
-};
+#include "freak_fortress_2/tf2tools.sp"
 
 enum SectionType
 {
@@ -157,15 +82,6 @@ enum struct SoundEnum
 }
 
 public const char SndExts[][] = { ".mp3", ".wav" };
-public const char TFClassName[][] = { "custom", "scout", "sniper", "soldier", "demoman", "medic", "heavy", "pyro", "spy", "engineer" };
-
-public const int TeamColors[][] =
-{
-	{255, 255, 100, 255},
-	{100, 255, 100, 255},
-	{255, 100, 100, 255},
-	{100, 100, 255, 255}
-};
 
 enum
 {
@@ -186,6 +102,7 @@ enum
 	BossKnockback,
 	
 	BossVsBoss,
+	BossTeam,
 	SpecTeam,
 	CaptureTime,
 	CaptureAlive,
@@ -198,6 +115,7 @@ enum
 	RefreshTime,
 	DisguiseModels,
 	PlayerGlow,
+	MusicPlaylist,
 	RankingStats,
 	RankingLose,
 	RankingStyle,
@@ -223,8 +141,8 @@ enum
 
 ConVar Cvar[Cvar_MAX];
 
-int PlayersAlive[TFTeam_MAX];
-int MaxPlayersAlive[TFTeam_MAX];
+int PlayersAlive[TFTeam_MAXLimit];
+int MaxPlayersAlive[TFTeam_MAXLimit];
 int Charset;
 bool Enabled;
 int RoundStatus;
@@ -232,41 +150,41 @@ bool PluginsEnabled;
 Handle PlayerHud;
 Handle ThisPlugin;
 
-#include "freak_fortress_2/client.sp"
-#include "freak_fortress_2/stocks.sp"
+#include "freak_fortress_2/core/client.sp"
+#include "freak_fortress_2/core/stocks.sp"
 
-#include "freak_fortress_2/attributes.sp"
-#include "freak_fortress_2/bosses.sp"
-#include "freak_fortress_2/commands.sp"
-#include "freak_fortress_2/configs.sp"
-#include "freak_fortress_2/convars.sp"
+#include "freak_fortress_2/core/attributes.sp"
+#include "freak_fortress_2/core/bosses.sp"
+#include "freak_fortress_2/core/commands.sp"
+#include "freak_fortress_2/core/configs.sp"
+#include "freak_fortress_2/core/convars.sp"
 #include "freak_fortress_2/customattrib.sp"
-#include "freak_fortress_2/database.sp"
-#include "freak_fortress_2/dhooks.sp"
-#include "freak_fortress_2/dome.sp"
+#include "freak_fortress_2/core/database.sp"
+#include "freak_fortress_2/core/dhooks.sp"
+#include "freak_fortress_2/core/dome.sp"
 #include "freak_fortress_2/econdata.sp"
-#include "freak_fortress_2/events.sp"
-#include "freak_fortress_2/filenetwork.sp"
+#include "freak_fortress_2/core/events.sp"
+#include "freak_fortress_2/core/filenetwork.sp"
 #include "freak_fortress_2/formula_parser.sp"
-#include "freak_fortress_2/forwards.sp"
-#include "freak_fortress_2/forwards_old.sp"
-#include "freak_fortress_2/gamemode.sp"
-#include "freak_fortress_2/goomba.sp"
-#include "freak_fortress_2/menu.sp"
-#include "freak_fortress_2/music.sp"
-#include "freak_fortress_2/natives.sp"
-#include "freak_fortress_2/natives_old.sp"
-#include "freak_fortress_2/preference.sp"
-#include "freak_fortress_2/ranking.sp"
-#include "freak_fortress_2/sdkcalls.sp"
-#include "freak_fortress_2/sdkhooks.sp"
-#include "freak_fortress_2/steamworks.sp"
-#include "freak_fortress_2/teuton.sp"
+#include "freak_fortress_2/core/forwards.sp"
+#include "freak_fortress_2/core/forwards_old.sp"
+#include "freak_fortress_2/core/gamemode.sp"
+#include "freak_fortress_2/core/goomba.sp"
+#include "freak_fortress_2/core/menu.sp"
+#include "freak_fortress_2/core/music.sp"
+#include "freak_fortress_2/core/natives.sp"
+#include "freak_fortress_2/core/natives_old.sp"
+#include "freak_fortress_2/core/preference.sp"
+#include "freak_fortress_2/core/ranking.sp"
+#include "freak_fortress_2/core/sdkcalls.sp"
+#include "freak_fortress_2/core/sdkhooks.sp"
+#include "freak_fortress_2/core/steamworks.sp"
+#include "freak_fortress_2/core/teuton.sp"
 #include "freak_fortress_2/tf2attributes.sp"
 #include "freak_fortress_2/tf2items.sp"
 #include "freak_fortress_2/tf2utils.sp"
 #include "freak_fortress_2/vscript.sp"
-#include "freak_fortress_2/weapons.sp"
+#include "freak_fortress_2/core/weapons.sp"
 
 public Plugin myinfo =
 {
@@ -303,9 +221,12 @@ public void OnPluginStart()
 	LoadTranslations("ff2_rewrite.phrases");
 	LoadTranslations("common.phrases");
 	LoadTranslations("core.phrases");
-	if(!TranslationPhraseExists("Sapper Cooldown"))
+	if(!TranslationPhraseExists("View Creators"))
 		SetFailState("Translation file \"ff2_rewrite.phrases\" is outdated");
 	
+	TF2Tools_PluginStart();
+	SDKCall_Setup();
+
 	PlayerHud = CreateHudSynchronizer();
 	
 	Attrib_PluginStart();
@@ -323,7 +244,6 @@ public void OnPluginStart()
 	Menu_PluginStart();
 	Music_PluginStart();
 	Preference_PluginStart();
-	SDKCall_Setup();
 	SDKHook_PluginStart();
 	SteamWorks_PluginStart();
 	TF2U_PluginStart();
@@ -336,21 +256,23 @@ public void OnPluginStart()
 		if(IsClientInGame(i))
 			OnClientPutInServer(i);
 	}
+
+	char classname[64];
+	if(GetCurrentMap(classname, sizeof(classname)))
+	{
+		int entity = -1;
+		while((entity = FindEntityByClassname(entity, "*")) != -1)
+		{
+			GetEntityClassname(entity, classname, sizeof(classname));
+			OnEntityCreated(entity, classname);
+		}
+	}
 }
 
 public void OnAllPluginsLoaded()
 {
 	Configs_AllPluginsLoaded();
 	CustomAttrib_AllPluginsLoaded();
-
-	if(!Attrib_Loaded() && !VScript_Loaded())
-		LogError("[!!!] No attribute manager is loaded, make sure either TF2Attributes or VScript is loaded on the server and compiled into FF2");
-	
-	if(!TFED_Loaded() && !VScript_Loaded())
-		LogError("[!!!] Static attribute and weapons config will have problems, make sure either TFEconData or VScript is loaded on the server and compiled into FF2");
-	
-	if(!CustomAttrib_Loaded())
-		LogError("[!!!] No custom attribute manager is loaded, make sure either TFCustAttr or TFEconDynamic is loaded on the server and compiled into FF2");
 }
 
 public void OnMapInit()
@@ -365,6 +287,7 @@ public void OnMapStart()
 	Dome_MapStart();
 	Gamemode_MapStart();
 	Teuton_MapStart();
+	ServerCommand("script_execute freak_fortress_2");
 }
 
 public void OnConfigsExecuted()
@@ -413,9 +336,9 @@ public void OnLibraryAdded(const char[] name)
 	FileNet_LibraryAdded(name);
 	SDKHook_LibraryAdded(name);
 	SteamWorks_LibraryAdded(name);
+	TF2Tools_LibraryAdded(name);
 	TF2U_LibraryAdded(name);
 	TFED_LibraryAdded(name);
-	VScript_LibraryAdded(name);
 	Weapons_LibraryAdded(name);
 }
 
@@ -427,9 +350,9 @@ public void OnLibraryRemoved(const char[] name)
 	FileNet_LibraryRemoved(name);
 	SDKHook_LibraryRemoved(name);
 	SteamWorks_LibraryRemoved(name);
+	TF2Tools_LibraryRemoved(name);
 	TF2U_LibraryRemoved(name);
 	TFED_LibraryRemoved(name);
-	VScript_LibraryRemoved(name);
 	Weapons_LibraryRemoved(name);
 }
 
@@ -480,9 +403,4 @@ public void TF2_OnConditionAdded(int client, TFCond cond)
 {
 	Bosses_OnConditonAdded(client, cond);
 	Gamemode_ConditionAdded(client, cond);
-}
-
-public void TF2_OnConditionRemoved(int client, TFCond cond)
-{
-	Gamemode_ConditionRemoved(client, cond);
 }

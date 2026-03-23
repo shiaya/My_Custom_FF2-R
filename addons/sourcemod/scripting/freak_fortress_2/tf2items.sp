@@ -25,6 +25,7 @@ enum struct WeaponData
 	int Red;
 	int Green;
 	int Blue;
+	int Skin;
 	bool Equip;
 	bool Forumla;
 
@@ -48,6 +49,7 @@ enum struct WeaponData
 		this.Red = 255;
 		this.Green = 255;
 		this.Blue = 255;
+		this.Skin = -1;
 		this.Equip = equip;
 		this.Forumla = false;
 	}
@@ -82,6 +84,7 @@ stock int TF2Items_CreateFromCfg(int client, const char[] classname, ConfigMap c
 	strcopy(classname2, sizeof(classname2), classname);
 	
 	if(StrContains(classname2, "tf_") != 0 &&
+		StrContains(classname2, "tf2c_") != 0 &&
 		!StrEqual(classname2, "saxxy"))
 	{
 		if(!cfg.Get("name", classname2, sizeof(classname2)))
@@ -90,7 +93,7 @@ stock int TF2Items_CreateFromCfg(int client, const char[] classname, ConfigMap c
 	
 	TFClassType class = TF2_GetPlayerClass(client);
 	GetClassWeaponClassname(class, classname2, sizeof(classname2));
-	bool wearable = StrContains(classname2, "tf_weap") != 0;
+	bool wearable = StrContains(classname2, "tf_weap") != 0 && StrContains(classname2, "tf2c_weap") != 0;
 	
 	int index = 0;
 	cfg.GetInt("index", index);
@@ -258,16 +261,13 @@ stock int TF2Items_CreateFromCfg(int client, const char[] classname, ConfigMap c
 			int attrib = StringToInt(buffers[attribs]);
 			if(attrib)
 			{
-				if(TF2ED_GetAttributeName(attrib, buffer, sizeof(buffer)))
+				if(forumla)
 				{
-					if(forumla)
-					{
-						Attrib_Set(entity, buffer, ParseFormula(buffers[attribs+1], alive));
-					}
-					else
-					{
-						Attrib_SetString(entity, buffer, buffers[attribs+1]);
-					}
+					Attrib_Set(entity, _, attrib, ParseFormula(buffers[attribs+1], alive));
+				}
+				else
+				{
+					Attrib_SetString(entity, _, attrib, buffers[attribs+1]);
 				}
 			}
 			else
@@ -303,11 +303,11 @@ stock int TF2Items_CreateFromCfg(int client, const char[] classname, ConfigMap c
 				{
 					if(forumla)
 					{
-						Attrib_Set(entity, key, ParseFormula(val.data, alive));
+						Attrib_Set(entity, key, _, ParseFormula(val.data, alive));
 					}
 					else
 					{
-						Attrib_SetString(entity, key, val.data);
+						Attrib_SetString(entity, key, _, val.data);
 					}
 				}
 			}
@@ -323,9 +323,9 @@ stock int TF2Items_CreateFromCfg(int client, const char[] classname, ConfigMap c
 
 		if(kills >= 0)
 		{
-			Attrib_SetInt(entity, "kill eater", kills);
+			Attrib_SetInt(entity, "kill eater", 214, kills);
 			if(wearable)
-				Attrib_SetInt(entity, "strange restriction type 1", 64);
+				Attrib_SetInt(entity, "strange restriction type 1", 454, 64);
 		}
 		
 		if(!wearable)
@@ -426,6 +426,9 @@ stock int TF2Items_CreateFromCfg(int client, const char[] classname, ConfigMap c
 			SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
 			SetEntityRenderColor(entity, index, kills, count, level);
 		}
+
+		if(cfg.GetInt("skin", level))
+			SetEntProp(entity, Prop_Send, "m_nSkin", level);
 		
 		SetEntProp(entity, Prop_Send, "m_iAccountID", GetSteamAccountID(client, false));
 		
@@ -453,7 +456,7 @@ stock int TF2Items_CreateFromStruct(int client, const WeaponData data)
 	
 	TFClassType class = TF2_GetPlayerClass(client);
 	GetClassWeaponClassname(class, data.Classname, sizeof(data.Classname));
-	bool wearable = StrContains(data.Classname, "tf_weap") != 0;
+	bool wearable = StrContains(data.Classname, "tf_weap") != 0 && StrContains(data.Classname, "tf2c_weap") != 0;
 	
 	int kills = -1;
 	if(data.Rank < 0 && data.Level == -1 && !data.Override)
@@ -583,16 +586,13 @@ stock int TF2Items_CreateFromStruct(int client, const WeaponData data)
 			int attrib = StringToInt(buffers[attribs]);
 			if(attrib)
 			{
-				if(TF2ED_GetAttributeName(attrib, buffer, sizeof(buffer)))
+				if(data.Forumla)
 				{
-					if(data.Forumla)
-					{
-						Attrib_Set(entity, buffer, ParseFormula(buffers[attribs+1], alive));
-					}
-					else
-					{
-						Attrib_SetString(entity, buffer, buffers[attribs+1]);
-					}
+					Attrib_Set(entity, _, attrib, ParseFormula(buffers[attribs+1], alive));
+				}
+				else
+				{
+					Attrib_SetString(entity, _, attrib, buffers[attribs+1]);
 				}
 			}
 			else
@@ -603,9 +603,9 @@ stock int TF2Items_CreateFromStruct(int client, const WeaponData data)
 
 		if(kills >= 0)
 		{
-			Attrib_SetInt(entity, "kill eater", kills);
+			Attrib_SetInt(entity, "kill eater", 214, kills);
 			if(wearable)
-				Attrib_SetInt(entity, "strange restriction type 1", 64);
+				Attrib_SetInt(entity, "strange restriction type 1", 454, 64);
 		}
 		
 		if(!wearable)
@@ -689,6 +689,9 @@ stock int TF2Items_CreateFromStruct(int client, const WeaponData data)
 			
 			SetEntityRenderColor(entity, data.Red, data.Green, data.Blue, data.Alpha);
 		}
+
+		if(data.Skin >= 0)
+			SetEntProp(entity, Prop_Send, "m_nSkin", data.Skin);
 		
 		SetEntProp(entity, Prop_Send, "m_iAccountID", GetSteamAccountID(client, false));
 		

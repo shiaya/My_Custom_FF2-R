@@ -4,6 +4,7 @@
 #define FILE_MAPS	"data/freak_fortress_2/maps.cfg"
 
 static bool VotedPack;
+static int TeamCount = 2;
 
 void Configs_AllPluginsLoaded()
 {
@@ -20,6 +21,7 @@ void Configs_MapStart()
 bool Configs_MapIsGamemode(const char[] mapname)
 {
 	int enableResult = 1;
+	TeamCount = 2;
 	
 	ConfigMap cfg = new ConfigMap(FILE_MAPS);
 	if(cfg)
@@ -73,6 +75,11 @@ bool Configs_MapIsGamemode(const char[] mapname)
 	return enableResult == 1;
 }
 
+int Configs_TeamCount()
+{
+	return TeamCount;
+}
+
 bool Configs_SetMap(const char[] mapname)
 {
 	int enableResult = 1;
@@ -117,8 +124,23 @@ bool Configs_SetMap(const char[] mapname)
 				}
 				
 				int current = -1;
-				if(val.cfg.GetInt("enable", current) && current > enableResult)
-					enableResult = current;
+				if(val.cfg.GetInt("enable", current))
+				{
+					if(current > enableResult)
+						enableResult = current;
+					
+					if(current > 0 && val.cfg.GetInt("teams", TeamCount))
+					{
+						if(TeamCount < 2)
+						{
+							TeamCount = 2;
+						}
+						else if(TeamCount > (TFTeam_MAX - TFTeam_Red))
+						{
+							TeamCount = (TFTeam_MAX - TFTeam_Red);
+						}
+					}
+				}
 			}
 		}
 		
@@ -148,7 +170,7 @@ bool Configs_SetMap(const char[] mapname)
 
 static void Configs_StartVote(ConVar cvar, const char[] oldValue, const char[] newValue)
 {
-	if(!VotedPack && Cvar[PackVotes].BoolValue && Bosses_GetCharsetLength() > 1)
+	if(!VotedPack && Cvar[PackVotes].BoolValue && Bosses_MultipleCharsets(false))
 	{
 		char mapname[64];
 		GetMapDisplayName(newValue, mapname, sizeof(mapname));
@@ -181,7 +203,8 @@ static void Configs_PackVoteFrame()
 		if(start < 0)
 			start = 0;
 		
-		char buffer[64], num[12];
+		char buffer[12];
+		bool hidden;
 		
 		int i = start + 1;
 		for(int a; a < 8; a++)
@@ -189,11 +212,15 @@ static void Configs_PackVoteFrame()
 			if(i >= length)
 				i = 0;
 			
-			if(Bosses_GetCharset(i, buffer, sizeof(buffer)))
+			ConfigMap pack = Bosses_GetCharset(i);
+			if(pack.GetBool("hidden", hidden, false) && hidden)
 			{
-				IntToString(i, num, sizeof(num));
-				menu.AddItem(num, buffer);
+				a--;
+				continue;
 			}
+
+			IntToString(i, buffer, sizeof(buffer));
+			menu.AddItem(buffer, buffer);
 			
 			if(i == start)
 				break;
@@ -222,17 +249,34 @@ static int Configs_PackVoteH(Menu menu, MenuAction action, int param1, int param
 		{
 			menu.SetTitle("%t", "Next Pack Vote", param1);
 		}
+		case MenuAction_DisplayItem:
+		{
+			char buffer[64];
+			menu.GetItem(param2, buffer, sizeof(buffer));
+			
+			if(Bosses_GetCharsetName(StringToInt(buffer), buffer, sizeof(buffer), GetClientLanguage(param1)))
+				return RedrawMenuItem(buffer);
+		}
 		case MenuAction_VoteCancel:
 		{
 			VotedPack = false;
 		}
 		case MenuAction_VoteEnd:
 		{
-			char buffer1[12], buffer2[64];
-			menu.GetItem(param1, buffer1, sizeof(buffer1), _, buffer2, sizeof(buffer2));
-			
-			Cvar[NextCharset].SetString(buffer1);
-			FPrintToChatAll("%t", "Next Pack Voted", buffer2);
+			char buffer[64];
+			menu.GetItem(param1, buffer, sizeof(buffer));
+
+			int charset = StringToInt(buffer);
+			Cvar[NextCharset].IntValue = charset;
+
+			for(int client = 1; client <= MaxClients; client++)
+			{
+				if(IsClientInGame(client) && !IsFakeClient(client))
+				{
+					Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(client));
+					FPrintToChat(client, "%t", "Next Pack Voted", buffer);
+				}
+			}
 		}
 	}
 	return 0;

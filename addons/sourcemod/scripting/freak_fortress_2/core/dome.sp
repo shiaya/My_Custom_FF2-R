@@ -60,14 +60,16 @@ void Dome_PluginStart()
 void Dome_MapStart()
 {
 	DomeAssets = true;
-
+	
+	bool enabled = Cvar[CaptureDome].FloatValue > 0.0;
+	bool check = (!enabled || Cvar[FileCheck].BoolValue);
 	for(int i; i < sizeof(Downloads); i++)
 	{
-		if(!FileExists(Downloads[i], true))
+		if(check && !FileExists(Downloads[i], true))
 		{
 			DomeAssets = false;
 
-			if(Cvar[CaptureDome].FloatValue > 0.0)
+			if(enabled)
 				LogError("[Dome] File '%s' does not exist", Downloads[i]);
 			
 			break;
@@ -365,12 +367,12 @@ static void Dome_Frame_Shrink()
 				
 				//give bleed if havent been given one
 				if(!TF2_IsPlayerInCondition(client, TFCond_Bleeding))
-					TF2_MakeBleed(client, client, 9999.0);	//Does no damage, ty sourcemod
+					TF2Tools_MakeBleed(client, client, 9999.0);	//Does no damage, ty sourcemod
 			}
 			else if(DomePlayerOutside[client])
 			{
 				//Client is not outside of dome, remove bleed
-				TF2_RemoveCondition(client, TFCond_Bleeding);
+				TF2Tools_RemoveCondition(client, TFCond_Bleeding);
 				DomePlayerOutside[client] = false;
 			}
 			

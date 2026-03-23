@@ -70,6 +70,14 @@
 	{
 		"en"		"BLU Team"
 	}
+	"Team 4"
+	{
+		"en"		"GRN Team"
+	}
+	"Team 5"
+	{
+		"en"		"YLW Team"
+	}
 	"Point Unlocked"
 	{
 		"en"		"Control Point Unlocked"
@@ -205,6 +213,16 @@
 	{
 		"#format"	"{1:d}"
 		"en"		"Sapper: {1}％"
+	}
+	"RPS Queue Win"
+	{
+		"#format"	"{1:d},{2:N}"
+		"en"		"You won {olive}{1} {default}queue points from {teamcolor}{2}{default}!"
+	}
+	"RPS Queue Lost"
+	{
+		"#format"	"{1:d},{2:N}"
+		"en"		"You lost {olive}{1} {default}queue points to {teamcolor}{2}{default}!"
 	}
 	
 	"Preference Updated"
@@ -899,6 +917,11 @@
 	{
 		"#format"	"{1:s},{2:s},{3:s},{4:s}"
 		"en"		"Successive hits on a boss increases reload time by {3}%%"
+	}
+	"mod recharge time hit stale"
+	{
+		"#format"	"{1:s},{2:s},{3:s},{4:s}"
+		"en"		"Successive hits on a boss increases recharge time by {3}%%"
 	}
 	"mod stun boss on hit"
 	{

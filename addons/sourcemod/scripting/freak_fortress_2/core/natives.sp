@@ -8,6 +8,7 @@ void Native_PluginLoad()
 	CreateNative("FF2R_EmitBossSound", Native_EmitBossSound);
 	CreateNative("FF2R_DoBossSlot", Native_DoBossSlot);
 	CreateNative("FF2R_GetSpecialData", Native_GetSpecialData);
+	CreateNative("FF2R_GetSpecialCount", Native_GetSpecialCount);
 	CreateNative("FF2R_CreateBoss", Native_CreateBoss);
 	CreateNative("FF2R_GetClientMinion", Native_GetClientMinion);
 	CreateNative("FF2R_SetClientMinion", Native_SetClientMinion);
@@ -62,7 +63,10 @@ static any Native_SetBossData(Handle plugin, int params)
 	if(wasBoss)
 	{
 		if(forwards || !cfg)
+		{
 			Forward_OnBossRemoved(client);
+			VScript_Call("_FF2_BossRemoved", client);
+		}
 		
 		DeleteCfg(Client(client).Cfg);
 	}
@@ -93,7 +97,10 @@ static any Native_SetBossData(Handle plugin, int params)
 	}
 
 	if(forwards && Client(client).Cfg)
+	{
 		Forward_OnBossCreated(client, cfg, GetRoundStatus() == 1);
+		VScript_CreateBoss(client);
+	}
 
 	return 0;
 }
@@ -142,6 +149,11 @@ static any Native_DoBossSlot(Handle plugin, int params)
 static any Native_GetSpecialData(Handle plugin, int params)
 {
 	return Bosses_GetConfig(GetNativeCell(1));
+}
+
+static int Native_GetSpecialCount(Handle plugin, int params)
+{
+	return Bosses_GetConfigLength();
 }
 
 static any Native_CreateBoss(Handle plugin, int params)
@@ -211,7 +223,7 @@ static any Native_StartLagCompensation(Handle plugin, int params)
 	if(client < 1 || client > MaxClients || !IsClientInGame(client))
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client index %d is not in-game", client);
 	
-	SDKCall_StartLagCompensation(client);
+	TF2U_StartLagCompensation(client);
 	return 0;
 }
 
@@ -221,7 +233,7 @@ static any Native_FinishLagCompensation(Handle plugin, int params)
 	if(client < 1 || client > MaxClients || !IsClientInGame(client))
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client index %d is not in-game", client);
 	
-	SDKCall_FinishLagCompensation(client);
+	TF2U_FinishLagCompensation(client);
 	return 0;
 }
 

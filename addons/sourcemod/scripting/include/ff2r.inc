@@ -105,32 +105,6 @@ native Handle FF2R_GetPluginHandle();
 native int FF2R_GetGamemodeType();
 
 /**
- * Calls CLagCompensationManager::StartLagCompensation
- * 
- * @note			Make sure to call FF2R_FinishLagCompensation afterwards
- * 
- * @param client	Client index
- * 
- * @error			Invalid client index or client is not in game
- * 
- * @noreturn
- */
-native void FF2R_StartLagCompensation(int client);
-
-/**
- * Calls CLagCompensationManager::FinishLagCompensation
- * 
- * @note			Make sure to call FF2R_StartLagCompensation first
- * 
- * @param client	Client index
- * 
- * @error			Invalid client index or client is not in game
- * 
- * @noreturn
- */
-native void FF2R_FinishLagCompensation(int client);
-
-/**
  * Updates max health, speed attributes, and the health bar
  * 
  * @param boss	Boss's client index
@@ -204,6 +178,14 @@ native int FF2R_GetClientAssist(int client);
 native void FF2R_SetClientAssist(int client, int assist);
 
 /**
+ * Gets the current loaded bosses count.
+ * Useful for loops with FF2R_GetSpecialData.
+ *
+ * @return			Loaded bosses count
+ */
+native int FF2R_GetSpecialCount();
+
+/**
  * Called when a player spawns, dies, disconnects, etc.
  * 
  * @note		Players counted as minions aren't counted
@@ -214,6 +196,7 @@ native void FF2R_SetClientAssist(int client, int assist);
  * @return		Plugin_Changed if the count was changed, Plugin_Handled to also prevent lastman and control point logic, Plugin_Stop to also prevent post forwards from being called
  */
 forward Action FF2R_OnAliveChange(int alive[4], int total[4]);
+forward Action FF2R_OnAliveChange2(int[] alive, int[] total, int teams);
 
 /**
  * Called when a player spawns, dies, disconnects, etc.
@@ -226,6 +209,7 @@ forward Action FF2R_OnAliveChange(int alive[4], int total[4]);
  * @noreturn
  */
 forward void FF2R_OnAliveChanged(const int alive[4], const int total[4]);
+forward void FF2R_OnAliveChanged2(const int[] alive, const int[] total, int teams);
 
 /**
  * Called when a boss gets removed
@@ -244,7 +228,7 @@ forward void FF2R_OnBossRemoved(int client);
  * @param client	Client index
  * @param weapon	Entity index of dropped weapon
  * 
- * @return		Plugin_Changed to let the game decide, Plugin_Handled to allow pickup, Plugin_Stop to block pickup
+ * @return		Plugin_Changed for normal logic, Plugin_Handled for deleting the weapon, Plugin_Stop for blocking all logic
  */
 forward Action FF2R_OnPickupDroppedWeapon(int client, int weapon);
 
@@ -257,6 +241,20 @@ forward Action FF2R_OnPickupDroppedWeapon(int client, int weapon);
  * @noreturn
  */
 forward void FF2R_OnBossEquipped(int client, bool weapons);
+
+/**
+ * Called when a player's boss rank gets updated
+ * 
+ * @note			Old and new rank can be the same
+ * 
+ * @param client	Client index
+ * @param filename	Boss's filename key
+ * @param oldRank	Previous rank value
+ * @param newRank	New rank value
+ * 
+ * @noreturn
+ */
+forward void FF2R_OnRankChange(int client, const char[] filename, int oldRank, int newRank);
 
 /**
  * Wrapper to emit sound to one client.
@@ -827,7 +825,7 @@ native void FF2R_SetBossData(int client, ConfigMap cfg = null, bool forwards);
  * 
  * @return			ConfigMap handle if found, null otherwise
  */
-native BossData FF2R_GetSpecialData(int client);
+native BossData FF2R_GetSpecialData(int special);
 
 /**
  * Creates or removes a boss on a player
@@ -934,6 +932,12 @@ forward void FF2R_OnBossModifier(int client);
 
 #endif
 
+#pragma deprecated Use TF2Util_StartLagCompensation
+native void FF2R_StartLagCompensation(int client);
+
+#pragma deprecated Use TF2Util_FinishLagCompensation
+native void FF2R_FinishLagCompensation(int client);
+
 public SharedPlugin __pl_ff2r =
 {
 	name = "freak_fortress_2",
@@ -963,6 +967,7 @@ public void __pl_ff2r_SetNTVOptional()
 	MarkNativeAsOptional("FF2R_GetBossData");
 	MarkNativeAsOptional("FF2R_SetBossData");
 	MarkNativeAsOptional("FF2R_GetSpecialData");
+	MarkNativeAsOptional("FF2R_GetSpecialCount");
 	MarkNativeAsOptional("FF2R_CreateBoss");
 }
 #endif

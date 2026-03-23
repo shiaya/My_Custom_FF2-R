@@ -344,7 +344,7 @@
 
 #include <sourcemod>
 #include <sdkhooks>
-#include <tf2_stocks>
+#include <sdktools>
 #include <morecolors>
 #include <cfgmap>
 #undef REQUIRE_EXTENSIONS
@@ -361,13 +361,15 @@
 
 #define TF_PLAYER_ENEMY_BLASTED_ME (1 << 2)
 
+#include "freak_fortress_2/tf2tools.sp"
+
 Handle SDKEquipWearable;
 Handle SDKGetMaxHealth;
 Handle SDKSetSpeed;
 Handle SDKSetBlastJumpState;
 Handle SyncHud;
 
-int PlayersAlive[4];
+int PlayersAlive[TFTeam_MAXLimit];
 bool SpecTeam;
 
 ArrayList BossTimers[MAXTF2PLAYERS];
@@ -446,18 +448,23 @@ public void OnPluginStart()
 	if(!TranslationPhraseExists("Boss Demo Charge 13"))
 		SetFailState("Translation file \"ff2_rewrite.phrases\" is outdated");
 	
-	GameData gamedata = new GameData("sm-tf2.games");
+	TF2Tools_PluginStart();
 	
-	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetVirtual(gamedata.GetOffset("RemoveWearable") - 1);
-	PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer);
-	SDKEquipWearable = EndPrepSDKCall();
-	if(!SDKEquipWearable)
-		LogError("[Gamedata] Could not find RemoveWearable");
+	if(TF2Tools_Loaded())
+	{
+		GameData gamedata = new GameData("sm-tf2.games");
+		
+		StartPrepSDKCall(SDKCall_Player);
+		PrepSDKCall_SetVirtual(gamedata.GetOffset("RemoveWearable") - 1);
+		PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer);
+		SDKEquipWearable = EndPrepSDKCall();
+		if(!SDKEquipWearable)
+			LogError("[Gamedata] Could not find RemoveWearable");
+		
+		delete gamedata;
+	}
 	
-	delete gamedata;
-	
-	gamedata = new GameData("sdkhooks.games");
+	GameData gamedata = new GameData("sdkhooks.games");
 	
 	StartPrepSDKCall(SDKCall_Player);
 	PrepSDKCall_SetFromConf(gamedata, SDKConf_Virtual, "GetMaxHealth");
@@ -471,18 +478,32 @@ public void OnPluginStart()
 	gamedata = new GameData("ff2");
 	
 	StartPrepSDKCall(SDKCall_Entity);
-	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPlayer::TeamFortress_SetSpeed");
-	SDKSetSpeed = EndPrepSDKCall();
-	if(!SDKSetSpeed)
-		LogError("[Gamedata] Could not find CTFPlayer::TeamFortress_SetSpeed");
+	if(PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPlayer::TeamFortress_SetSpeed"))
+	{
+		SDKSetSpeed = EndPrepSDKCall();
+		if(!SDKSetSpeed)
+			LogError("[Gamedata] Could not find CTFPlayer::TeamFortress_SetSpeed");
+	}
 	
 	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPlayer::SetBlastJumpState");
-	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-	SDKSetBlastJumpState = EndPrepSDKCall();
-	if (!SDKSetBlastJumpState)
-		LogError("[Gamedata] Could not find CTFPlayer::SetBlastJumpState");
+	if(PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPlayer::SetBlastJumpState"))
+	{
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		SDKSetBlastJumpState = EndPrepSDKCall();
+		if(!SDKSetBlastJumpState)
+			LogError("[Gamedata] Could not find CTFPlayer::SetBlastJumpState");
+	}
+	
+	if(!TF2Tools_Loaded())
+	{
+		StartPrepSDKCall(SDKCall_Player);
+		PrepSDKCall_SetVirtual(gamedata.GetOffset("CBasePlayer::EquipWearable"));
+		PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer);
+		SDKEquipWearable = EndPrepSDKCall();
+		if(!SDKEquipWearable)
+			LogError("[Gamedata] Could not find CBasePlayer::EquipWearable");
+	}
 	
 	delete gamedata;
 	
@@ -539,7 +560,7 @@ public void OnPluginEnd()
 			if(OverlayTimer[client])
 				TriggerTimer(OverlayTimer[client]);
 			
-			if(FF2R_GetBossData(client))
+			if(Subplugin_Enabled() && FF2R_GetBossData(client))
 				FF2R_OnBossRemoved(client);
 		}
 	}
@@ -562,9 +583,9 @@ public void OnLibraryAdded(const char[] name)
 	Attrib_LibraryAdded(name);
 	CustomAttrib_LibraryAdded(name);
 	Subplugin_LibraryAdded(name);
+	TF2Tools_LibraryAdded(name);
 	TF2U_LibraryAdded(name);
 	TFED_LibraryAdded(name);
-	VScript_LibraryAdded(name);
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -572,9 +593,9 @@ public void OnLibraryRemoved(const char[] name)
 	Attrib_LibraryRemoved(name);
 	CustomAttrib_LibraryRemoved(name);
 	Subplugin_LibraryRemoved(name);
+	TF2Tools_LibraryRemoved(name);
 	TF2U_LibraryRemoved(name);
 	TFED_LibraryRemoved(name);
-	VScript_LibraryRemoved(name);
 }
 
 public void OnClientPutInServer(int client)
@@ -643,7 +664,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					
 					MatrixDelay[client] = gameTime + (GetFormula(ability, "delay", alive, 2.0) * timescale);
 					
-					FF2R_StartLagCompensation(client);
+					TF2U_StartLagCompensation(client);
 					
 					float pos[3], vec[3];
 					GetClientEyePosition(client, pos);
@@ -672,7 +693,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 						if(target > 0 && target <= MaxClients)
 						{
 							int team2 = GetClientTeam(target);
-							if(SpecTeam || team2 > view_as<int>(TFTeam_Spectator))
+							if(SpecTeam || team2 > TFTeam_Spectator)
 							{
 								bool friendly = (team1 == team2);
 								if(friendly || !IsInvuln(target))
@@ -680,7 +701,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 									if(friendly)	// Lag compenstated location only if they damaged attack
 									{
 										finished = true;
-										FF2R_FinishLagCompensation(client);
+										TF2U_FinishLagCompensation(client);
 									}
 									
 									GetEntPropVector(target, Prop_Send, "m_vecOrigin", pos);
@@ -688,7 +709,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 									if(!finished)
 									{
 										finished = true;
-										FF2R_FinishLagCompensation(client);
+										TF2U_FinishLagCompensation(client);
 									}
 
 									if(friendly || FF2R_GetGamemodeType() == 2 || !TF2U_IsInRespawnRoom(target))	// Don't teleport in spawn rooms on non-arena
@@ -711,7 +732,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					delete trace;
 					
 					if(!finished)
-						FF2R_FinishLagCompensation(client);
+						TF2U_FinishLagCompensation(client);
 				}
 				else
 				{
@@ -739,9 +760,9 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 	{
 		if(!TF2_IsPlayerInCondition(client, TFCond_HalloweenKartNoTurn))
 		{
-			TF2_RemoveCondition(client, TFCond_DisguisedAsDispenser);
-			TF2_RemoveCondition(client, TFCond_UberchargedOnTakeDamage);
-			TF2_RemoveCondition(client, TFCond_MegaHeal);
+			TF2Tools_RemoveCondition(client, TFCond_DisguisedAsDispenser);
+			TF2Tools_RemoveCondition(client, TFCond_UberchargedOnTakeDamage);
+			TF2Tools_RemoveCondition(client, TFCond_MegaHeal);
 		}
 	}
 	
@@ -765,7 +786,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 					{
 						if(AnchorStartTime[client] < (gameTime - ability.GetFloat("full", 3.5)))
 						{
-							TF2_AddCondition(client, TFCond_MegaHeal, 0.05, client);
+							TF2Tools_AddCondition(client, TFCond_MegaHeal, 0.05, client);
 							if(SDKSetSpeed && GetEntPropFloat(client, Prop_Send, "m_flMaxspeed") > 5.0)
 								SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", ability.GetFloat("speed", 175.0) * 3.0);
 						}
@@ -774,11 +795,11 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 							if(AnchorLastAttrib[client] == -69.42)
 							{
 								AnchorLastAttrib[client] = 1.0;
-								Attrib_Get(client, "damage force reduction", AnchorLastAttrib[client]);
+								Attrib_Get(client, "damage force reduction", 252, AnchorLastAttrib[client]);
 							}
 							
-							Attrib_Set(client, "damage force reduction", 0.0);
-							TF2_AddCondition(client, TFCond_InHealRadius, 0.05, client);
+							Attrib_Set(client, "damage force reduction", 252, 0.0);
+							TF2Tools_AddCondition(client, TFCond_InHealRadius, 0.05, client);
 							if(SDKSetSpeed && GetEntPropFloat(client, Prop_Send, "m_flMaxspeed") > 5.0)
 								SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", ability.GetFloat("speed", 175.0) * 3.0);
 						}
@@ -805,8 +826,8 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 	if(AnchorLastAttrib[client] != -69.42 && AnchorStartTime[client] <= 1.0)
 	{
 		float value;
-		if(!Attrib_Get(client, "damage force reduction", value) || !value)
-			Attrib_Set(client, "damage force reduction", AnchorLastAttrib[client]);
+		if(!Attrib_Get(client, "damage force reduction", 252, value) || !value)
+			Attrib_Set(client, "damage force reduction", 252, AnchorLastAttrib[client]);
 		
 		AnchorLastAttrib[client] = -69.42;
 	}
@@ -822,7 +843,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 				float gameTime = GetGameTime();
 				bool emergency = ability.GetFloat("emergencyfor") > gameTime;
 				bool cooldown = ability.GetBool("incooldown", true);
-				float timeIn = ability.GetFloat("delay");
+				float timeIn = ability.GetFloat("delayfor");
 				bool hud;
 				
 				if(cooldown)
@@ -833,7 +854,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 						timeIn = 0.0;
 						
 						ability.SetBool("incooldown", cooldown);
-						ability.SetFloat("delay", timeIn);
+						ability.SetFloat("delayfor", timeIn);
 						
 						hud = true;
 					}
@@ -858,7 +879,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 						if(timeIn)
 						{
 							timeIn = 0.0;
-							ability.SetFloat("delay", 0.0);
+							ability.SetFloat("delayfor", 0.0);
 							
 							hud = true;
 						}
@@ -868,7 +889,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 						if(!timeIn)
 						{
 							timeIn = gameTime;
-							ability.SetFloat("delay", timeIn);
+							ability.SetFloat("delayfor", timeIn);
 							
 							hud = true;
 						}
@@ -898,7 +919,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 
 							if(!emergency)
 							{
-								FF2R_StartLagCompensation(client);
+								TF2U_StartLagCompensation(client);
 								
 								GetClientEyePosition(client, pos1);
 								
@@ -936,7 +957,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 								if(team1 != team2 && !arena && TF2U_IsInRespawnRoom(target))
 									continue;
 
-								if(team1 > view_as<int>(TFTeam_Spectator) && !SpecTeam && team2 <= view_as<int>(TFTeam_Spectator))
+								if(team1 > TFTeam_Spectator && !SpecTeam && team2 <= TFTeam_Spectator)
 									continue;
 								
 								if(scale < GetEntPropFloat(i, Prop_Send, "m_flModelScale"))
@@ -959,7 +980,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 							
 							if(!emergency)
 							{
-								FF2R_FinishLagCompensation(client);
+								TF2U_FinishLagCompensation(client);
 							}
 							
 							if(target != -1)
@@ -974,12 +995,12 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 								ability.SetBool("incooldown", cooldown);
 								
 								timeIn = gameTime + ability.GetFloat("cooldown", 5.0);
-								ability.SetFloat("delay", timeIn);
+								ability.SetFloat("delayfor", timeIn);
 							}
 							else
 							{
 								timeIn = 0.0;
-								ability.SetFloat("delay", 0.0);
+								ability.SetFloat("delayfor", 0.0);
 							}
 						}
 						else if(jump && angles[0] < -20.0)
@@ -1018,12 +1039,12 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 							ability.SetBool("incooldown", cooldown);
 							
 							timeIn = gameTime + ability.GetFloat("cooldown", 5.0);
-							ability.SetFloat("delay", timeIn);
+							ability.SetFloat("delayfor", timeIn);
 						}
 						else
 						{
 							timeIn = 0.0;
-							ability.SetFloat("delay", 0.0);
+							ability.SetFloat("delayfor", 0.0);
 						}
 					}
 				}
@@ -1258,7 +1279,7 @@ public void OnTakeDamagePost(int victim, int attacker, int inflictor, float dama
 			if(boss && (ability = boss.GetAbility("special_mobility")))
 			{
 				ability.SetBool("incooldown", true);
-				ability.SetFloat("delay", 0.0);
+				ability.SetFloat("delayfor", 0.0);
 				ability.SetFloat("emergencyfor", GetGameTime() + 1.5);
 				return;
 			}
@@ -1318,7 +1339,7 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 			if(ability.IsMyPlugin())
 			{
 				MobilityEnabled[client] = true;
-				ability.SetFloat("delay", GetGameTime() + ability.GetFloat("delay", 5.0));
+				ability.SetFloat("delayfor", GetGameTime() + ability.GetFloat("delay", 5.0));
 				SDKHook(client, SDKHook_OnTakeDamagePost, OnTakeDamagePost);
 			}
 		}
@@ -1390,8 +1411,10 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 		float duration = GetFormula(cfg, "duration", TotalPlayersAliveEnemy(CvarFriendlyFire.BoolValue ? -1 : GetClientTeam(client)), 5.0);
 		
 		SpecialUber[client] = GetGameTime() + duration;
-		SetEntProp(client, Prop_Data, "m_takedamage", 0);
-		TF2_AddCondition(client, TFCond_UberchargedOnTakeDamage, duration, client);
+		TF2Tools_AddCondition(client, TFCond_UberchargedOnTakeDamage, duration, client);
+
+		if(TF2Tools_Loaded())
+			SetEntProp(client, Prop_Data, "m_takedamage", 0);
 	}
 	else if(!StrContains(ability, "rage_overlay", false))
 	{
@@ -1460,7 +1483,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 				continue;
 			
 			int team2 = GetClientTeam(target);
-			if(!SpecTeam && team2 <= view_as<int>(TFTeam_Spectator))
+			if(!SpecTeam && team2 <= TFTeam_Spectator)
 				continue;
 			
 			if(friendly)
@@ -1491,7 +1514,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 					continue;
 				
 				int team2 = GetClientTeam(target);
-				if(!SpecTeam && team2 <= view_as<int>(TFTeam_Spectator))
+				if(!SpecTeam && team2 <= TFTeam_Spectator)
 					continue;
 				
 				if(team1 != team2 && !arena && TF2U_IsInRespawnRoom(target))
@@ -1538,9 +1561,9 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 	}
 }
 
-public void FF2R_OnAliveChanged(const int alive[4], const int total[4])
+public void FF2R_OnAliveChanged2(const int[] alive, const int[] total, int teams)
 {
-	for(int i; i < 4; i++)
+	for(int i; i < teams && i < sizeof(PlayersAlive); i++)
 	{
 		PlayersAlive[i] = alive[i];
 	}
@@ -1570,10 +1593,10 @@ void RemoveCloneCfg(int userid)
 		SetEntProp(client, Prop_Send, "m_bForcedSkin", false);
 		SetEntProp(client, Prop_Send, "m_nForcedSkin", 0);
 		SetEntProp(client, Prop_Send, "m_iPlayerSkinOverride", 0);
-		Attrib_Remove(client, "major move speed bonus");
-		Attrib_Remove(client, "max health additive bonus");
-		Attrib_Remove(client, "healing received penalty");
-		Attrib_Remove(client, "reduced_healing_from_medics");
+		Attrib_Remove(client, "major move speed bonus", 442);
+		Attrib_Remove(client, "max health additive bonus", 26);
+		Attrib_Remove(client, "healing received penalty", 734);
+		Attrib_Remove(client, "reduced_healing_from_medics", 740);
 	}
 }
 
@@ -1598,11 +1621,11 @@ public void FF2R_OnBossModifier(int client, ConfigData cfg)
 			else
 			{
 				float hp;
-				Attrib_Get(client, "max health additive bonus", hp);
+				Attrib_Get(client, "max health additive bonus", 26, hp);
 				
 				hp += float(SDKCall_GetMaxHealth(client) * (lives - 1));
 				
-				Attrib_Set(client, "max health additive bonus", hp);
+				Attrib_Set(client, "max health additive bonus", 26, hp);
 			}
 			
 			SetEntityHealth(client, GetClientHealth(client) * lives);
@@ -1621,11 +1644,11 @@ public void FF2R_OnBossModifier(int client, ConfigData cfg)
 		else
 		{
 			float hp;
-			Attrib_Get(client, "max health additive bonus", hp);
+			Attrib_Get(client, "max health additive bonus", 26, hp);
 			
 			hp += float(SDKCall_GetMaxHealth(client)) * (multi - 1.0);
 			
-			Attrib_Set(client, "max health additive bonus", hp);
+			Attrib_Set(client, "max health additive bonus", 26, hp);
 		}
 		
 		SetEntityHealth(client, RoundToZero(float(GetClientHealth(client)) * multi));
@@ -1878,11 +1901,11 @@ void OnObjectDeflected(Event event, const char[] name, bool dontBroadcast)
 			float duration = SpecialUber[client] + 1.5;
 			
 			SpecialUber[client] = 0.0;
-			TF2_RemoveCondition(client, TFCond_UberchargedOnTakeDamage);
+			TF2Tools_RemoveCondition(client, TFCond_UberchargedOnTakeDamage);
 			
 			SpecialUber[client] = duration;
 			duration -= GetGameTime();
-			TF2_AddCondition(client, TFCond_UberchargedOnTakeDamage, duration, client);
+			TF2Tools_AddCondition(client, TFCond_UberchargedOnTakeDamage, duration, client);
 		}
 	}
 }
@@ -2004,7 +2027,7 @@ Action Timer_RageStun(Handle timer, DataPack pack)
 		char particle[48];
 		cfg.GetString("particle", particle, sizeof(particle), "yikes_fx");
 		
-		FF2R_StartLagCompensation(client);
+		TF2U_StartLagCompensation(client);
 		
 		float pos1[3], pos2[3];
 		GetClientEyePosition(client, pos1);
@@ -2041,7 +2064,7 @@ Action Timer_RageStun(Handle timer, DataPack pack)
 			victim[victims++] = target;
 		}
 		
-		FF2R_FinishLagCompensation(client);
+		TF2U_FinishLagCompensation(client);
 		
 		if(victims == 0)
 		{
@@ -2050,14 +2073,18 @@ Action Timer_RageStun(Handle timer, DataPack pack)
 		else if(victims == 1)
 		{
 			duration = soloduration;
-			SoloVictim[victim[0]] = true;
 			
-			for(int target = 1; target <= MaxClients; target++)
+			if(TF2Tools_Loaded())
 			{
-				if(IsClientInGame(target))
+				SoloVictim[victim[0]] = true;
+				
+				for(int target = 1; target <= MaxClients; target++)
 				{
-					GetBossNameCfg(boss, buffer, sizeof(buffer), GetClientLanguage(target));
-					CPrintToChatEx(target, client, "%t%t", "Prefix", "Boss Solo Rage", buffer);
+					if(IsClientInGame(target))
+					{
+						GetBossNameCfg(boss, buffer, sizeof(buffer), GetClientLanguage(target));
+						CPrintToChatEx(target, client, "%t%t", "Prefix", "Boss Solo Rage", buffer);
+					}
 				}
 			}
 		}
@@ -2073,9 +2100,9 @@ Action Timer_RageStun(Handle timer, DataPack pack)
 			for(int i; i<victims; i++)
 			{
 				if(basejumper)
-					TF2_RemoveCondition(victim[i], TFCond_Parachute);
+					TF2Tools_RemoveCondition(victim[i], TFCond_Parachute);
 				
-				TF2_StunPlayer(victim[i], duration * GetPlayerStunMulti(victim[i]), slowdown, flags, sound ? client : 0);
+				TF2Tools_StunPlayer(victim[i], duration * GetPlayerStunMulti(victim[i]), slowdown, flags, sound ? client : 0);
 				
 				if(particle[0])
 					AttachParticle(victim[i], particle, duration);
@@ -2319,7 +2346,7 @@ void Rage_NewWeapon(int client, ConfigData cfg, const char[] ability)
 	
 	TFClassType class = TF2_GetPlayerClass(client);
 	GetClassWeaponClassname(class, classname, sizeof(classname));
-	bool wearable = StrContains(classname, "tf_weap") != 0;
+	bool wearable = StrContains(classname, "tf_weap") != 0 && StrContains(classname, "tf2c_weap") != 0;
 
 	float lifetime = cfg.GetFloat("lifetime");
 
@@ -2330,7 +2357,7 @@ void Rage_NewWeapon(int client, ConfigData cfg, const char[] ability)
 	if(!wearable && lifetime <= 0.0)
 	{
 		if(slot >= 0 && slot < 6)
-			TF2_RemoveWeaponSlot(client, slot);
+			TF2Tools_RemoveWeaponSlot(client, slot);
 	}
 	
 	int entity = TF2Items_CreateFromCfg(client, classname, cfg, _, true);
@@ -2409,7 +2436,7 @@ Action Timer_RemoveItem(Handle timer, DataPack pack)
 		{
 			if(pack.ReadCell())
 			{
-				TF2_RemoveWearable(client, entity);
+				TF2Tools_RemoveWearable(client, entity);
 			}
 			else
 			{
@@ -2427,7 +2454,7 @@ Action Timer_RemoveItem(Handle timer, DataPack pack)
 							if(HasEntProp(entity, Prop_Send, "m_iWeaponState")) //Reset minigun-like weapons
 							{
 								SetEntProp(entity, Prop_Send, "m_iWeaponState", 0);
-								TF2_RemoveCondition(client, TFCond_Slowed);
+								TF2Tools_RemoveCondition(client, TFCond_Slowed);
 							}
 
 							TF2U_SetPlayerActiveWeapon(client, other);
@@ -2494,7 +2521,7 @@ void Rage_CloneAttack(int client, ConfigData cfg)
 			else
 			{
 				// Don't summon dead spectators
-				if(team2 <= view_as<int>(TFTeam_Spectator))
+				if(team2 <= TFTeam_Spectator)
 					continue;
 				
 				// +2 for being dead already
@@ -2576,7 +2603,7 @@ void SpawnCloneList(int[][] clients, int amount, ConfigData cfg, int owner, int 
 		vel[1] = GetRandomFloat(-500.0, 500.0);
 		vel[2] = GetRandomFloat(300.0, 500.0);
 		
-		TF2_RespawnPlayer(client);
+		TF2Tools_RespawnPlayer(client);
 		SetEntProp(client, Prop_Send, "m_bDucked", true);
 		SetEntityFlags(client, GetEntityFlags(client) | FL_DUCKING);
 
@@ -2584,11 +2611,14 @@ void SpawnCloneList(int[][] clients, int amount, ConfigData cfg, int owner, int 
 			TeleportEntity(client, pos, _, vel);
 		
 		// Lessen the strength cap between active and AFK players
-		CloneIdle[client] = true;
-		TF2_AddCondition(client, TFCond_HalloweenKartNoTurn, 2.0);
-		TF2_AddCondition(client, TFCond_DisguisedAsDispenser, 20.0);
-		TF2_AddCondition(client, TFCond_UberchargedOnTakeDamage, 20.0);
-		TF2_AddCondition(client, TFCond_MegaHeal, 15.0);
+		if(TF2Tools_Loaded())
+		{
+			CloneIdle[client] = true;
+			TF2Tools_AddCondition(client, TFCond_HalloweenKartNoTurn, 2.0);
+			TF2Tools_AddCondition(client, TFCond_DisguisedAsDispenser, 20.0);
+			TF2Tools_AddCondition(client, TFCond_UberchargedOnTakeDamage, 20.0);
+			TF2Tools_AddCondition(client, TFCond_MegaHeal, 15.0);
+		}
 		
 		if(owner > 0)
 			SDKHook(client, SDKHook_OnTakeDamage, CloneTakeDamage);
@@ -2864,12 +2894,12 @@ void Rage_TeleportToTarget(int client, int target, ConfigData cfg)
 		bool sound = cfg.GetBool("sound");
 
 		if(slowdown > 0.0)
-			TF2_RemoveCondition(client, TFCond_MegaHeal);
+			TF2Tools_RemoveCondition(client, TFCond_MegaHeal);
 		
-		TF2_StunPlayer(client, stun, slowdown, flags, sound ? client : 0);
+		TF2Tools_StunPlayer(client, stun, slowdown, flags, sound ? client : 0);
 		SetEntPropFloat(client, Prop_Send, "m_flNextAttack", GetGameTime() + stun);
 
-		TF2_AddCondition(target, TFCond_UberchargedHidden, 0.2, client);
+		TF2Tools_AddCondition(target, TFCond_UberchargedHidden, 0.2, client);
 
 		char particle[48];
 		if(cfg.GetString("particle", particle, sizeof(particle)))
@@ -2961,7 +2991,7 @@ Action Timer_RestoreCollision(Handle timer, DataPack pack)
 int TotalPlayersAliveEnemy(int team = -1)
 {
 	int amount;
-	for(int i = SpecTeam ? 0 : 2; i < sizeof(PlayersAlive); i++)
+	for(int i = SpecTeam ? TFTeam_Unassigned : TFTeam_Red; i < TFTeam_MAX; i++)
 	{
 		if(i != team)
 			amount += PlayersAlive[i];
@@ -2983,16 +3013,16 @@ float GetPlayerStunMulti(int client)
 	multi = 1.15 - (multi * 0.001);
 	
 	// Ranged damage attributes
-	multi *= Attrib_FindOnPlayer(client, "dmg taken from fire reduced", true) *
-			 Attrib_FindOnPlayer(client, "dmg taken from fire increased", true) *
-			 Attrib_FindOnPlayer(client, "dmg taken from blast reduced", true) *
-			 Attrib_FindOnPlayer(client, "dmg taken from blast increased", true) *
-			 Attrib_FindOnPlayer(client, "dmg taken from bullets reduced", true) *
-			 Attrib_FindOnPlayer(client, "dmg taken from bullets increased", true) *
-			 Attrib_FindOnPlayer(client, "dmg taken increased", true) *
-			 Attrib_FindOnPlayer(client, "SET BONUS: dmg taken from fire reduced set bonus", true) *
-			 Attrib_FindOnPlayer(client, "SET BONUS: dmg taken from bullets increased", true) *
-			 Attrib_FindOnPlayer(client, "CARD: dmg taken from bullets reduced", true);
+	multi *= Attrib_FindOnPlayer(client, "dmg taken from fire reduced", 60, true) *
+			 Attrib_FindOnPlayer(client, "dmg taken from fire increased", 61, true) *
+			 Attrib_FindOnPlayer(client, "dmg taken from blast reduced", 64, true) *
+			 Attrib_FindOnPlayer(client, "dmg taken from blast increased", 65, true) *
+			 Attrib_FindOnPlayer(client, "dmg taken from bullets reduced", 66, true) *
+			 Attrib_FindOnPlayer(client, "dmg taken from bullets increased", 67, true) *
+			 Attrib_FindOnPlayer(client, "dmg taken increased", 412, true) *
+			 Attrib_FindOnPlayer(client, "SET BONUS: dmg taken from fire reduced set bonus", 492, true) *
+			 Attrib_FindOnPlayer(client, "SET BONUS: dmg taken from bullets increased", 516, true) *
+			 Attrib_FindOnPlayer(client, "CARD: dmg taken from bullets reduced", 1001, true);
 	
 	// Mark-for-Death = x1.35
 	if(TF2_IsPlayerInCondition(client, TFCond_MarkedForDeath) ||
@@ -3002,12 +3032,12 @@ float GetPlayerStunMulti(int client)
 	
 	// Ranged damage attributes
 	int active = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
-	multi *= Attrib_FindOnWeapon(client, active, "dmg from ranged reduced", true) *
-			 Attrib_FindOnWeapon(client, active, "dmg taken from fire reduced on active", true) *
-			 Attrib_FindOnWeapon(client, active, "mult_dmgtaken_active", true);
+	multi *= Attrib_FindOnWeapon(client, active, "dmg from ranged reduced", 205, true) *
+			 Attrib_FindOnWeapon(client, active, "dmg taken from fire reduced on active", 794, true) *
+			 Attrib_FindOnWeapon(client, active, "mult_dmgtaken_active", 852, true);
 	
 	if(TF2_IsPlayerInCondition(client, TFCond_Slowed) && health < SDKCall_GetMaxHealth(client) / 2)
-		multi *= Attrib_FindOnWeapon(client, active, "spunup_damage_resistance", true);
+		multi *= Attrib_FindOnWeapon(client, active, "spunup_damage_resistance", 738, true);
 	
 	return multi;
 }
@@ -3162,7 +3192,7 @@ TFClassType GetClassOfName(const char[] buffer)
 {
 	TFClassType class = view_as<TFClassType>(StringToInt(buffer));
 	if(class == TFClass_Unknown)
-		class = TF2_GetClass(buffer);
+		class = TF2Tools_GetClass(buffer);
 	
 	return class;
 }
@@ -3199,11 +3229,11 @@ void TF2_RemoveItem(int client, int weapon)
 {
 	int entity = GetEntPropEnt(weapon, Prop_Send, "m_hExtraWearable");
 	if(entity != -1)
-		TF2_RemoveWearable(client, entity);
+		TF2Tools_RemoveWearable(client, entity);
 
 	entity = GetEntPropEnt(weapon, Prop_Send, "m_hExtraWearableViewModel");
 	if(entity != -1)
-		TF2_RemoveWearable(client, entity);
+		TF2Tools_RemoveWearable(client, entity);
 
 	RemovePlayerItem(client, weapon);
 	RemoveEntity(weapon);

@@ -75,7 +75,7 @@
 
 #include <sourcemod>
 #include <sdkhooks>
-#include <tf2_stocks>
+#include <sdktools>
 #include <adt_trie_sort>
 #include <cfgmap>
 #undef REQUIRE_EXTENSIONS
@@ -88,6 +88,9 @@
 #define PLUGIN_VERSION	"Custom"
 
 #define ABILITY_NAME	"special_menu_manager"
+
+#define TFTeam_Spectator		1
+#define TF_DEATHFLAG_DEADRINGER	(1 << 5)
 
 #define MAXTF2PLAYERS	MAXPLAYERS+1
 #define FAR_FUTURE		100000000.0
@@ -255,7 +258,7 @@ public void FF2R_OnBossCreated(int client, BossData boss, bool setup)
 							
 							float delay = SetFloatFromFormula(spell, "delay", players);
 							if(delay > 0.0)
-								spell.SetFloat("delay", delay + gameTime);
+								spell.SetFloat("delayfor", delay + gameTime);
 							
 							if(manas)
 							{
@@ -468,7 +471,7 @@ public bool ShowMenuAll(int client, bool ticked)
 				if(client != i && IsClientInGame(i) && IsClientObserver(i) && GetEntPropEnt(i, Prop_Send, "m_hObserverTarget") == client && (ViewingMenu[i] || (enabled && GetClientMenu(i) == MenuSource_None)))
 				{
 					int team2 = GetClientTeam(i);
-					if(team2 == view_as<int>(TFTeam_Spectator) || team1 == team2)
+					if(team2 == TFTeam_Spectator || team1 == team2)
 						ShowMenu(i, client, boss, ability, enabled, false);
 				}
 			}
@@ -614,7 +617,7 @@ public void ShowMenu(int target, int client, BossData boss, AbilityData ability,
 					if(IsPlayerAlive(i) && team1 == team2)
 						allies++;
 				}
-				else if(team1 == team2 || team2 > view_as<int>(TFTeam_Spectator))
+				else if(team1 == team2 || team2 > TFTeam_Spectator)
 				{
 					if(team1 == team2 || !IsPlayerAlive(i))
 						summonable++;
@@ -703,7 +706,7 @@ public void ShowMenu(int target, int client, BossData boss, AbilityData ability,
 				
 				if(SetupMode[client])
 				{
-					float cooldown = spell.GetFloat("delay");
+					float cooldown = spell.GetFloat("delayfor") - gameTime;
 					if(cooldown < 0.0)
 						cooldown = 0.0;
 					
@@ -714,7 +717,7 @@ public void ShowMenu(int target, int client, BossData boss, AbilityData ability,
 				}
 				else
 				{
-					float cooldown = spell.GetFloat("delay") - gameTime;
+					float cooldown = spell.GetFloat("delayfor") - gameTime;
 					if(cooldown > 0.0)
 					{
 						if(cooldown < 1000.0)
@@ -883,7 +886,7 @@ public int ShowMenuH(Menu menu, MenuAction action, int client, int selection)
 							if(spell)
 							{
 								float gameTime = GetGameTime();
-								if(spell.GetFloat("delay") < gameTime)
+								if(spell.GetFloat("delayfor") < gameTime)
 								{
 									bool blocked;
 									var1 = spell.GetInt("flags");
@@ -902,7 +905,7 @@ public int ShowMenuH(Menu menu, MenuAction action, int client, int selection)
 													if(IsPlayerAlive(i) && team1 == team2)
 														allies++;
 												}
-												else if(team1 == team2 || team2 > view_as<int>(TFTeam_Spectator))
+												else if(team1 == team2 || team2 > TFTeam_Spectator)
 												{
 													if(team1 == team2 || !IsPlayerAlive(i))
 														summonable++;
@@ -990,7 +993,7 @@ public int ShowMenuH(Menu menu, MenuAction action, int client, int selection)
 											
 											if(!blocked)
 											{
-												spell.SetFloat("delay", gameTime + spell.GetFloat("cooldown"));
+												spell.SetFloat("delayfor", gameTime + spell.GetFloat("cooldown"));
 												
 												int slot = spell.GetInt("high", spell.GetInt("low"));
 												FF2R_DoBossSlot(client, spell.GetInt("low", slot), slot);
@@ -1015,8 +1018,8 @@ public int ShowMenuH(Menu menu, MenuAction action, int client, int selection)
 
 														if(spell2)
 														{
-															if(spell2.GetFloat("delay") < gameTime + globalCooldown)
-																spell2.SetFloat("delay", gameTime + globalCooldown);
+															if(spell2.GetFloat("delayfor") < gameTime + globalCooldown)
+																spell2.SetFloat("delayfor", gameTime + globalCooldown);
 														}
 													}
 													delete snap;
@@ -1106,7 +1109,7 @@ public void RefreshSpells(int client, BossData boss, AbilityData ability)
 					if((flags & MAG_LASTLIFE) && boss.GetInt("livesleft", 1) != 1)
 						continue;
 					
-					if(spell.GetFloat("delay") > gameTime)
+					if(spell.GetFloat("delayfor") > gameTime)
 						continue;
 					
 					spell.SetBool("disabled", false);
