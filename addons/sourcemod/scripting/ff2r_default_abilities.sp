@@ -356,7 +356,7 @@
 
 #define PLUGIN_VERSION	"Custom"
 
-#define MAXTF2PLAYERS	MAXPLAYERS+1
+#define MAXTF2PLAYERS	65
 #define FAR_FUTURE		100000000.0
 
 #define TF_PLAYER_ENEMY_BLASTED_ME (1 << 2)
@@ -2570,6 +2570,8 @@ void SpawnCloneList(int[][] clients, int amount, ConfigData cfg, int owner, int 
 	bool lowPrio = ability.GetBool("low prio", false);
 	bool highPrio = ability.GetBool("high prio", false);
 	bool weaponsOnly = (cfg && ability.GetBool("weapons only", false));
+	float CCTime = ability.GetFloat("cc time", 2.0);
+	float AFKTime = ability.GetFloat("afk time", 20.0);
 	
 	if(rivalTeam)
 		team = (team == 2) ? 3 : 2;
@@ -2613,11 +2615,17 @@ void SpawnCloneList(int[][] clients, int amount, ConfigData cfg, int owner, int 
 		// Lessen the strength cap between active and AFK players
 		if(TF2Tools_Loaded())
 		{
-			CloneIdle[client] = true;
-			TF2Tools_AddCondition(client, TFCond_HalloweenKartNoTurn, 2.0);
-			TF2Tools_AddCondition(client, TFCond_DisguisedAsDispenser, 20.0);
-			TF2Tools_AddCondition(client, TFCond_UberchargedOnTakeDamage, 20.0);
-			TF2Tools_AddCondition(client, TFCond_MegaHeal, 15.0);
+			if(CCTime>0.0)
+				TF2Tools_AddCondition(client, TFCond_HalloweenKartNoTurn, CCTime);
+			if(AFKTime>0.0)
+			{
+				CloneIdle[client] = true;
+				TF2Tools_AddCondition(client, TFCond_DisguisedAsDispenser, AFKTime);
+				TF2Tools_AddCondition(client, TFCond_UberchargedOnTakeDamage, AFKTime);
+				TF2Tools_AddCondition(client, TFCond_MegaHeal, AFKTime);
+			}
+			else
+				CloneIdle[client] = false;
 		}
 		
 		if(owner > 0)
