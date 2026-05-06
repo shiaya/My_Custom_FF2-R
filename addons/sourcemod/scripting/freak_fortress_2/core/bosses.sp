@@ -2275,7 +2275,7 @@ void Bosses_PlayerRunCmd(int client, int buttons)
 		{
 			Client(client).HoldingButton |= IN_ATTACK;
 
-			if(Client(client).SapperCooldownFor < time)
+			/*if(Client(client).SapperCooldownFor < time)
 			{
 				int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 				if(weapon != -1 && HasEntProp(weapon, Prop_Send, "m_iObjectType") && GetEntProp(weapon, Prop_Send, "m_iObjectType") == view_as<int>(TFObject_Sapper))
@@ -2296,7 +2296,7 @@ void Bosses_PlayerRunCmd(int client, int buttons)
 						}
 					}
 				}
-			}
+			}*/
 		}
 		
 		if(Client(client).IsBoss)
