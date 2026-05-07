@@ -4,12 +4,9 @@
 static bool FirstBlood;
 static bool LastMann;
 static bool InRegen;
-static Handle SyncHud;
 
 void Events_PluginStart()
 {
-	SyncHud = CreateHudSynchronizer();
-	
 	HookEvent("arena_round_start", Events_RoundStart, EventHookMode_Pre);
 	HookEvent("arena_win_panel", Events_WinPanel, EventHookMode_Pre);
 	HookEvent("building_healed", Events_ObjectHealed, EventHookMode_Post);
@@ -28,17 +25,6 @@ void Events_PluginStart()
 	HookEvent("teamplay_point_captured", Events_PointCaptured, EventHookMode_Post);
 	HookEvent("teamplay_round_win", Events_RoundEnd, EventHookMode_Post);
 	HookEvent("teamplay_setup_finished", Events_RoundStart, EventHookMode_Post);
-}
-
-void Events_RoundSetup()
-{
-	for(int client = 1; client <= MaxClients; client++)
-	{
-		if(IsClientInGame(client))
-		{
-			ClearSyncHud(client, SyncHud);
-		}
-	}
 }
 
 void Events_CheckAlivePlayers(int exclude = 0, bool alive = true, bool resetMax = false)
@@ -91,7 +77,7 @@ void Events_CheckAlivePlayers(int exclude = 0, bool alive = true, bool resetMax 
 		for(int client = 1; client <= MaxClients; client++)
 		{
 			// Get remaining bosses alive
-			if(IsClientInGame(client) && IsPlayerAlive(client) && Client(client).IsBoss && Client(client).Cfg.GetSection("sound_lastman"))
+			if(client != exclude && IsClientInGame(client) && IsPlayerAlive(client) && Client(client).IsBoss && Client(client).Cfg.GetSection("sound_lastman"))
 			{
 				team = GetClientTeam(client);
 
@@ -252,8 +238,12 @@ static void Events_ObjectHurt(Event event, const char[] name, bool dontBroadcast
 		{
 			int health = GetEntProp(victim, Prop_Data, "m_iHealth");
 			int activedamage = damage;
-			if(activedamage > health)
-				activedamage = health;
+			if(health < 0)
+			{
+				activedamage += health;
+				if(activedamage < 0)
+					activedamage = 0;
+			}
 			
 			Client(attacker).RefreshAt = 0.0;
 			Client(attacker).TotalDamage += activedamage;
@@ -283,6 +273,15 @@ static void Events_PlayerSpawn(Event event, const char[] name, bool dontBroadcas
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if(client && Cvar[DisguiseModels].BoolValue)
 	{
+		if(GetClientTeam(client) % 2)
+		{
+			Attrib_Remove(client, "vision opt in flags", 406);
+		}
+		else
+		{
+			Attrib_Set(client, "vision opt in flags", 406, 4.0);
+		}
+
 		SetEntProp(client, Prop_Send, "m_nModelIndexOverrides", 0, _, 0);
 		SetEntProp(client, Prop_Send, "m_nModelIndexOverrides", 0, _, 3);
 	}
@@ -366,7 +365,7 @@ static Action Events_InventoryApplication(Event event, const char[] name, bool d
 			SetVariantString(NULL_STRING);
 			AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
 			
-			if(!Client(client).NoChanges && RoundStatus == 0 && GetClientMenu(client) == MenuSource_None)
+			if(!Client(client).NoChanges && RoundStatus == 0 && (Weapons_InMenu(client) || GetClientMenu(client) == MenuSource_None))
 				Weapons_ChangeMenu(client, Cvar[PreroundTime].IntValue);
 		}
 		
@@ -402,8 +401,12 @@ static Action Events_PlayerHurt(Event event, const char[] name, bool dontBroadca
 		{
 			int health = Client(victim).Health;
 			int activedamage = damage;
-			if(activedamage > health)
-				activedamage = health;
+			if(health < 0)
+			{
+				activedamage += health;
+				if(activedamage < 0)
+					activedamage = 0;
+			}
 			
 			Client(attacker).RefreshAt = 0.0;
 			Client(attacker).TotalDamage += activedamage;
@@ -581,18 +584,21 @@ static void Events_PlayerDeath(Event event, const char[] name, bool dontBroadcas
 				Events_CheckAlivePlayers(victim);
 				CustomAttrib_PlayerDeath(victim);
 				
-				int entity, i;
-				while(TF2_GetItem(victim, entity, i))
+				if(!Client(victim).IsBoss)
 				{
-					if(!GetEntProp(entity, Prop_Send, "m_iAccountID"))
-						TF2_RemoveItem(victim, entity);
-				}
-				
-				i = 0;
-				while(TF2U_GetWearable(victim, entity, i))
-				{
-					if(!GetEntProp(entity, Prop_Send, "m_iAccountID"))
-						TF2Tools_RemoveWearable(victim, entity);
+					int entity, i;
+					while(TF2_GetItem(victim, entity, i))
+					{
+						if(!GetEntProp(entity, Prop_Send, "m_iAccountID"))
+							TF2_RemoveItem(victim, entity);
+					}
+					
+					i = 0;
+					while(TF2U_GetWearable(victim, entity, i))
+					{
+						if(!GetEntProp(entity, Prop_Send, "m_iAccountID"))
+							TF2Tools_RemoveWearable(victim, entity);
+					}
 				}
 			}
 			
@@ -828,7 +834,7 @@ static Action Events_WinPanel(Event event, const char[] name, bool dontBroadcast
 				{
 					TF2Tools_GetTeamColor4(GetClientTeam(clients[i]), color);
 					SetHudTextParamsEx(-1.0, 0.5, 15.0, {255, 255, 255, 255}, color, Cvar[BonusroundTime].FloatValue < 14.0 ? 0 : 2, 3.0);
-					ShowSyncHudText(clients[i], SyncHud, screen);
+					ShowSyncHudText(clients[i], TeamSyncHud[3], screen);
 				}
 			}
 		}

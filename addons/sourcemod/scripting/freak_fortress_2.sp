@@ -17,7 +17,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION		"1.2"
+#define PLUGIN_VERSION		"1.3"
 #define PLUGIN_VERSION_REVISION	"custom"
 #define PLUGIN_VERSION_FULL	"Rewrite " ... PLUGIN_VERSION ... "." ... PLUGIN_VERSION_REVISION
 #define IS_MAIN_FF2
@@ -31,6 +31,11 @@
 #define MAXTF2PLAYERS	MAXPLAYERS+1
 
 #define SNDVOL_BOSS	2.0
+
+#define PREF_ENABLED	(1 << 0)
+#define PREF_PLAYING	(1 << 1)
+#define PREF_MENU		(1 << 2)
+#define PREF_RAID		(1 << 3)
 
 #include "freak_fortress_2/tf2tools.sp"
 
@@ -116,6 +121,9 @@ enum
 	DisguiseModels,
 	PlayerGlow,
 	MusicPlaylist,
+	RaidChance,
+	RaidLimit,
+	RaidPlayers,
 	RankingStats,
 	RankingLose,
 	RankingStyle,
@@ -143,6 +151,7 @@ ConVar Cvar[Cvar_MAX];
 
 int PlayersAlive[TFTeam_MAXLimit];
 int MaxPlayersAlive[TFTeam_MAXLimit];
+Handle TeamSyncHud[TFTeam_MAXLimit];
 int Charset;
 bool Enabled;
 int RoundStatus;
@@ -221,7 +230,7 @@ public void OnPluginStart()
 	LoadTranslations("ff2_rewrite.phrases");
 	LoadTranslations("common.phrases");
 	LoadTranslations("core.phrases");
-	if(!TranslationPhraseExists("View Creators"))
+	if(!TranslationPhraseExists("Whitelist All"))
 		SetFailState("Translation file \"ff2_rewrite.phrases\" is outdated");
 	
 	TF2Tools_PluginStart();
@@ -340,6 +349,7 @@ public void OnLibraryAdded(const char[] name)
 	TF2U_LibraryAdded(name);
 	TFED_LibraryAdded(name);
 	Weapons_LibraryAdded(name);
+	VScript_LibraryAdded(name);
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -354,6 +364,7 @@ public void OnLibraryRemoved(const char[] name)
 	TF2U_LibraryRemoved(name);
 	TFED_LibraryRemoved(name);
 	Weapons_LibraryRemoved(name);
+	VScript_LibraryRemoved(name);
 }
 
 public void OnClientPutInServer(int client)

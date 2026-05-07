@@ -325,10 +325,13 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 			ConfigMap cfgBosses = cfgPack.GetSection("bosses");
 			if(!cfgBosses)
 				cfgBosses = cfgPack;
-
-			PackList.Push(cfgPack);
 			
+			bool hasLoaded;
 			bool precache = charset == pack;
+			if(!precache)
+				cfgPack.GetBool("alwaysload", precache, false);
+			
+			PackList.Push(cfgPack);
 
 			SortedSnapshot snapBosses = CreateSortedSnapshot(cfgBosses);
 			int entriesBosses = snapBosses.Length;
@@ -364,14 +367,21 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 					{
 						case KeyValType_Section:
 						{
+							ConfigMap cfgBoss = val.cfg;
+
+							bool loadboss = choosen.FindValue(a) != -1;
+							cfgBoss.GetBool(precache ? "packload" : "outload", loadboss, false);
+
 							length = ReplaceString(bossname, length, "*", NULL_STRING);
 							if(length)
 							{
-								LoadCharacterDirectory(filepath, bossname, length>1, pack, mapname, choosen.FindValue(a) != -1, vscripts);
+								if(LoadCharacterDirectory(filepath, bossname, length>1, pack, mapname, loadboss, vscripts))
+									hasLoaded = true;
 							}
 							else
 							{
-								LoadCharacter(bossname, pack, mapname, choosen.FindValue(a) != -1, vscripts);
+								if(LoadCharacter(bossname, pack, mapname, loadboss, vscripts))
+									hasLoaded = true;
 							}
 						}
 						case KeyValType_Value:
@@ -383,11 +393,13 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 									length = ReplaceString(bossname, length, "*", NULL_STRING);
 									if(length)
 									{
-										LoadCharacterDirectory(filepath, bossname, length>1, pack, mapname, choosen.FindValue(a) != -1, vscripts);
+										if(LoadCharacterDirectory(filepath, bossname, length>1, pack, mapname, choosen.FindValue(a) != -1, vscripts))
+											hasLoaded = true;
 									}
 									else
 									{
-										LoadCharacter(bossname, pack, mapname, choosen.FindValue(a) != -1, vscripts);
+										if(LoadCharacter(bossname, pack, mapname, choosen.FindValue(a) != -1, vscripts))
+											hasLoaded = true;
 									}
 								}
 							}
@@ -396,11 +408,13 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 								length = ReplaceString(val.data, sizeof(val.data), "*", NULL_STRING);
 								if(length)
 								{
-									LoadCharacterDirectory(filepath, val.data, length>1, pack, mapname, choosen.FindValue(a) != -1, vscripts);
+									if(LoadCharacterDirectory(filepath, val.data, length>1, pack, mapname, choosen.FindValue(a) != -1, vscripts))
+										hasLoaded = true;
 								}
 								else
 								{
-									LoadCharacter(val.data, pack, mapname, choosen.FindValue(a) != -1, vscripts);
+									if(LoadCharacter(val.data, pack, mapname, choosen.FindValue(a) != -1, vscripts))
+										hasLoaded = true;
 								}
 							}
 						}
@@ -409,6 +423,8 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 
 				delete choosen;
 			}
+
+			cfgPack.SetInt("_loaded", hasLoaded ? 1 : 0);
 
 			if(clean && cfgBosses != cfgPack)
 				cfgPack.DeleteSection("bosses");
@@ -434,6 +450,7 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 	{
 		ConfigMap cfg = view_as<ConfigMap>(new StringMap());
 		cfg.Set("name", "Freak Fortress 2");
+		cfg.SetInt("loaded", 1);
 
 		PackList.Push(cfg);
 		BuildPath(Path_SM, filepath, sizeof(filepath), FOLDER_CONFIGS);
@@ -505,7 +522,7 @@ void Bosses_BuildPacks(int &charset, const char[] mapname)
 	}
 }
 
-static void LoadCharacterDirectory(const char[] basepath, const char[] matching, bool full, int charset, const char[] map, bool precache, ArrayList vscripts, const char[] current = NULL_STRING)
+static bool LoadCharacterDirectory(const char[] basepath, const char[] matching, bool full, int charset, const char[] map, bool precache, ArrayList vscripts, const char[] current = NULL_STRING)
 {
 	char filepath[PLATFORM_MAX_PATH];
 	if(current[0])
@@ -519,8 +536,9 @@ static void LoadCharacterDirectory(const char[] basepath, const char[] matching,
 	
 	DirectoryListing listing = OpenDirectory(filepath);
 	if(!listing)
-		return;
+		return false;
 	
+	bool loaded;
 	FileType type;
 	while(listing.GetNext(filepath, sizeof(filepath), type))
 	{
@@ -535,7 +553,10 @@ static void LoadCharacterDirectory(const char[] basepath, const char[] matching,
 					Format(filepath, sizeof(filepath), "%s/%s", current, filepath);
 				
 				if(!matching[0] || (full && StrContains(filepath, matching) != -1) || (!full && !StrContains(filepath, matching)))
-					LoadCharacter(filepath, charset, map, precache, vscripts);
+				{
+					if(LoadCharacter(filepath, charset, map, precache, vscripts))
+						loaded = true;
+				}
 				
 				continue;
 			}
@@ -547,15 +568,18 @@ static void LoadCharacterDirectory(const char[] basepath, const char[] matching,
 				if(current[0])
 					Format(filepath, sizeof(filepath), "%s/%s", current, filepath);
 				
-				LoadCharacterDirectory(basepath, matching, full, charset, map, precache, vscripts, filepath);
+				if(LoadCharacterDirectory(basepath, matching, full, charset, map, precache, vscripts, filepath))
+					loaded = true;
 			}
 		}
 	}
 	
 	delete listing;
+
+	return loaded;
 }
 
-static void LoadCharacter(const char[] character, int charset, const char[] map, bool precached, ArrayList vscripts)
+static bool LoadCharacter(const char[] character, int charset, const char[] map, bool precached, ArrayList vscripts)
 {
 	char buffer[PLATFORM_MAX_PATH];
 	FormatEx(buffer, sizeof(buffer), "%s/%s.cfg", FOLDER_CONFIGS, character);
@@ -565,7 +589,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 	{
 		LogError("[Boss] %s is not a boss character", character);
 		DeleteCfg(full);
-		return;
+		return false;
 	}
 	
 	ConfigMap cfg = full.GetSection("character");
@@ -573,7 +597,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 	{
 		LogError("[Boss] %s is not a boss character", character);
 		DeleteCfg(full);
-		return;
+		return false;
 	}
 	
 	bool precache = precached;
@@ -581,7 +605,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 	if(action == Plugin_Stop)
 	{
 		DeleteCfg(full);
-		return;
+		return false;
 	}
 	
 	if(action != Plugin_Handled)
@@ -599,7 +623,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 			}
 			
 			DeleteCfg(full);
-			return;
+			return false;
 		}
 		
 		if(cfg.GetInt("fversion", i) && i != 2)
@@ -614,7 +638,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 			}
 			
 			DeleteCfg(full);
-			return;
+			return false;
 		}
 	}
 	
@@ -668,7 +692,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 						int amount = ReplaceString(mapname, length, "*", NULL_STRING);
 						if(StrEqual(map, mapname, false) || (amount == 1 && !StrContains(map, mapname, false)) || (amount > 1 && StrContains(map, mapname, false) != -1))
 						{
-							precache = view_as<bool>(StringToInt(val.data));
+							cfgsub.GetBool(val.data, precache, false);
 							size = length;
 						}
 					}
@@ -858,7 +882,11 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 											music = cfgsound.GetSize("time") > 0;
 									}
 									
-									if(StrContains(key, SndExts[0]) != -1 || StrContains(key, SndExts[1]) != -1)
+									if(StrContains(key, "!") == 0)
+									{
+										PrecacheSentenceFile(key);
+									}
+									else if(StrContains(key, SndExts[0]) != -1 || StrContains(key, SndExts[1]) != -1)
 									{
 										if(music && StrContains(key, "#") != 0)	// Replace the tree with an added #
 										{
@@ -892,7 +920,11 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 												music = view_as<bool>(cfgsub.GetInt(section, length2));
 											}
 											
-											if(StrContains(key, SndExts[0]) != -1 || StrContains(key, SndExts[1]) != -1)	// Check to make sure it's a sound
+											if(StrContains(key, "!") == 0)
+											{
+												PrecacheSentenceFile(key);
+											}
+											else if(StrContains(key, SndExts[0]) != -1 || StrContains(key, SndExts[1]) != -1)	// Check to make sure it's a sound
 											{
 												if(music && StrContains(key, "#") != 0)
 												{
@@ -919,7 +951,11 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 												music = view_as<bool>(cfgsub.GetInt(buffer2, length2));
 											}
 											
-											if(StrContains(buffer, SndExts[0]) != -1 || StrContains(buffer, SndExts[1]) != -1)	// Check to make sure it's a sound
+											if(StrContains(buffer, "!") == 0)
+											{
+												PrecacheSentenceFile(buffer);
+											}
+											else if(StrContains(buffer, SndExts[0]) != -1 || StrContains(buffer, SndExts[1]) != -1)	// Check to make sure it's a sound
 											{
 												if(music && StrContains(buffer, "#") != 0)
 												{
@@ -1492,11 +1528,12 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 	
 	TFClassType class = TFClass_Scout;
 	if(cfg.Get("class", buffer, sizeof(buffer)))
-		class = GetClassOfName(buffer);
+		class = TF2Tools_GetClass(buffer);
 	
 	cfg.SetInt("class", view_as<int>(class));
 	
 	Forward_OnBossPrecached(cfg, precache, BossList.Push(cfg));
+	return true;
 }
 
 void Bosses_MapEnd()
@@ -1536,7 +1573,7 @@ int Bosses_GetCharsetLength()
 }
 
 // If multiple boss packs are visible
-bool Bosses_MultipleCharsets(bool currentCheck = true)
+bool Bosses_MultipleCharsets(bool &multiLoaded = false)
 {
 	if(PackList)
 	{
@@ -1545,10 +1582,13 @@ bool Bosses_MultipleCharsets(bool currentCheck = true)
 		for(int i; i < length; i++)
 		{
 			ConfigMap pack = PackList.Get(i);
-			if(!currentCheck || !Enabled || i != Charset)
+			if(!Enabled || i != Charset)
 			{
 				if(pack.GetBool("hidden", hidden, false) && hidden)
 					continue;
+				
+				if(pack.GetBool("alwaysload", hidden) && hidden)
+					multiLoaded = true;
 			}
 			
 			if(found)
@@ -1558,6 +1598,58 @@ bool Bosses_MultipleCharsets(bool currentCheck = true)
 		}
 	}
 
+	return false;
+}
+
+bool Bosses_MultiLoadCharsets(bool &allLoaded = false)
+{
+	bool found;
+
+	if(PackList)
+	{
+		allLoaded = true;
+
+		bool value;
+		int length = PackList.Length;
+		for(int i; i < length; i++)
+		{
+			ConfigMap pack = PackList.Get(i);
+			if(!Enabled || i != Charset)
+			{
+				if(pack.GetBool("hidden", value, false) && value)
+					continue;
+				
+				if(Bosses_IsCharsetSideLoaded(i))
+				{
+					found = true;
+				}
+				else
+				{
+					allLoaded = false;
+				}
+			}
+		}
+	}
+
+	return found;
+}
+
+bool Bosses_IsCharsetSideLoaded(int index)
+{
+	if(Charset != index)
+	{
+		ConfigMap cfg = Bosses_GetCharset(index);
+		if(cfg)
+		{
+			bool value;
+			if(cfg.GetBool("alwaysload", value, false) && value)
+				return true;
+			
+			if(cfg.GetBool("_loaded", value) && value)
+				return true;
+		}
+	}
+	
 	return false;
 }
 
@@ -1636,74 +1728,6 @@ int Bosses_GetByName(const char[] name, bool exact = true, bool enabled = true, 
 	return similarBoss;
 }
 
-bool Bosses_CanAccessBoss(int client, int special, bool playing = false, int team = -1, bool enabled = true, bool &preview = false)
-{
-	ConfigMap cfg = Bosses_GetConfig(special);
-	if(!cfg)
-		return false;
-	
-	bool blocked;
-	if(enabled && (!cfg.GetBool("enabled", blocked) || !blocked))
-		return false;
-	
-	if(playing)
-	{
-		// If random is disabled, blocks the boss being played without being selected
-		blocked = false;
-		if(cfg.GetBool("random", blocked, false) && !blocked)
-		{
-			if(!Preference_HasWhitelisted(client, special, false))
-				return false;
-		}
-	}
-	
-	cfg.GetBool("preview", preview, false);
-	
-	static char buffer1[512];
-	if(cfg.Get("steamid", buffer1, sizeof(buffer1)))
-	{
-		static char buffer2[64];
-		return GetClientAuthId(client, AuthId_SteamID64, buffer2, sizeof(buffer2)) && StrContains(buffer1, buffer2, false) != -1;
-	}
-	
-	blocked = false;
-	if(cfg.GetBool("blocked", blocked, false) && blocked)
-		return false;
-	
-	blocked = false;
-	if(cfg.GetBool("owner", blocked, false) && blocked)
-		return false;
-	
-	if(team != -1)
-	{
-		int value;
-		if(cfg.GetInt("bossteam", value) && value > TFTeam_Spectator && team != value)
-			return false;
-	}
-	
-	bool admin = view_as<bool>(cfg.Get("admin", buffer1, sizeof(buffer1)));
-	if(admin)
-		blocked = !CheckCommandAccess(client, "ff2_all_bosses", ReadFlagString(buffer1), true);
-	
-	if(!admin || blocked)
-	{
-		if(cfg.Get("cvar", buffer1, sizeof(buffer1)))
-		{
-			// If a cvar, check if it's enabled
-			ConVar cvar = FindConVar(buffer1);
-			if(!cvar || !cvar.BoolValue)
-				return false;
-			
-			blocked = false;
-		}
-		
-		if(!playing)	// If have both "admin" and "hidden", allow playing the boss randomly
-			cfg.GetBool("hidden", blocked, false);
-	}
-	
-	return !blocked;
-}
-
 bool Bosses_GetBossName(int special, char[] buffer, int length, int lang = -1, const char[] string = "name")
 {
 	ConfigMap cfg = Bosses_GetConfig(special);
@@ -1767,7 +1791,7 @@ void Bosses_CreateFromConfig(int client, ConfigMap cfg, int team, int lead = 0, 
 	if(Client(client).Cfg)
 	{
 		Forward_OnBossRemoved(client);
-		VScript_Call("_FF2_BossRemoved", client);
+		VScript_BossRemoved(client);
 		DeleteCfg(Client(client).Cfg);
 		Client(client).Cfg = null;
 	}
@@ -1831,7 +1855,7 @@ void Bosses_CreateFromConfig(int client, ConfigMap cfg, int team, int lead = 0, 
 
 	TFClassType playerClass = TFClass_Scout;
 	if(Client(client).Cfg.Get("class", buffer, sizeof(buffer)))
-		playerClass = GetClassOfName(buffer);
+		playerClass = TF2Tools_GetClass(buffer);
 
 	Client(client).Cfg.SetInt("class", view_as<int>(playerClass));
 
@@ -1897,16 +1921,19 @@ int Bosses_SetHealth(int client, int players)
 	float ragedmg = 1900.0;
 	static char buffer[1024];
 	if(Client(client).Cfg.Get("ragedamage", buffer, sizeof(buffer)))
-		ragedmg = ParseFormula(buffer, players);
+		ragedmg = ParseExpr(buffer, Formula_BasicValue, float(players));
 	
 	Client(client).RageDamage = ragedmg;
 	
 	int maxhealth;
 	if(Client(client).Cfg.Get("health_formula", buffer, sizeof(buffer)))
-		maxhealth = RoundFloat(ParseFormula(buffer, players));
-	
-	if(maxhealth < 1)
+	{
+		maxhealth = RoundFloat(ParseExpr(buffer, Formula_BasicValue, float(players)));
+	}
+	else
+	{
 		maxhealth = RoundFloat(Pow((760.8 + players) * (players - 1.0), 1.0341) + 2046.0);
+	}
 	
 	Client(client).MaxHealth = maxhealth;
 	
@@ -2063,7 +2090,7 @@ static void EquipBoss(int client, bool weapons)
 	Forward_OnBossEquipped(client, weapons);
 
 	if(weapons)
-		VScript_Call("_FF2_BossEquipped", client);
+		VScript_BossEquipped(client);
 }
 
 void Bosses_UpdateHealth(int client)
@@ -2177,7 +2204,7 @@ void Bosses_ClientDisconnect(int client)
 		Ranking_BossRemoved(client, true);
 		DHook_UnhookBoss(client);
 		Forward_OnBossRemoved(client);
-		VScript_Call("_FF2_BossRemoved", client);
+		VScript_BossRemoved(client);
 		DeleteCfg(Client(client).Cfg);
 		Client(client).Cfg = null;
 		
@@ -2207,7 +2234,7 @@ void Bosses_Remove(int client)
 		Ranking_BossRemoved(client, false);
 		DHook_UnhookBoss(client);
 		Forward_OnBossRemoved(client);
-		VScript_Call("_FF2_BossRemoved", client);
+		VScript_BossRemoved(client);
 		
 		DeleteCfg(Client(client).Cfg);
 		Client(client).Cfg = null;
@@ -2305,6 +2332,9 @@ void Bosses_PlayerRunCmd(int client, int buttons)
 			{
 				Client(client).PassiveAt = time + 0.2;
 				Bosses_UseSlot(client, 1, 3);
+
+				if(IsFakeClient(client))
+					Bosses_UseRage(client);
 			}
 			
 			if(!Client(client).NoHud && !(buttons & IN_SCORE))
@@ -2373,6 +2403,40 @@ void Bosses_PlayerRunCmd(int client, int buttons)
 			}
 		}
 	}
+}
+
+Action Bosses_UseRage(int client)
+{
+	if(!Client(client).IsBoss)
+		return Plugin_Handled;
+	
+	float rageDamage = Client(client).RageDamage;
+	if(rageDamage >= 0.0 && rageDamage < 99999.0)
+	{
+		int rageType = Client(client).RageMode;
+		if(rageType != 2)
+		{
+			float rageMin, charge;
+			if(rageDamage <= 1.0 || (charge = Client(client).GetCharge(0)) >= (rageMin = Client(client).RageMin))
+			{
+				if(rageDamage > 1.0)
+				{
+					if(rageType == 1)
+					{
+						Client(client).SetCharge(0, charge - rageMin);
+					}
+					else if(rageType == 0)
+					{
+						Client(client).SetCharge(0, 0.0);
+					}
+				}
+				
+				Bosses_UseSlot(client, 0, 0);
+				return Plugin_Handled;
+			}
+		}
+	}
+	return Plugin_Continue;
 }
 
 void Bosses_UseSlot(int client, int low, int high)
@@ -2792,7 +2856,7 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 								sound.Entity = SOUND_FROM_PLAYER;
 						}
 						
-						if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1)
+						if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1 && StrContains(key, "!") != 0)
 						{
 							if(GetGameSoundParams(key, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 								size = strlen(sound.Sound);
@@ -2835,7 +2899,7 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 					{
 						if(length > val.size)	// "example.mp3"	""
 						{
-							if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1)
+							if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1 && StrContains(key, "!") != 0)
 							{
 								if(GetGameSoundParams(key, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 									size = strlen(sound.Sound);
@@ -2884,7 +2948,7 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 							
 							size = strcopy(sound.Sound, sizeof(sound.Sound), val.data);
 							
-							if(StrContains(sound.Sound, SndExts[0]) == -1 && StrContains(sound.Sound, SndExts[1]) == -1)
+							if(StrContains(sound.Sound, SndExts[0]) == -1 && StrContains(sound.Sound, SndExts[1]) == -1 && StrContains(sound.Sound, "!") != 0)
 							{
 								if(GetGameSoundParams(sound.Sound, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 									size = strlen(sound.Sound);
@@ -2930,7 +2994,7 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 						sound.Entity = SOUND_FROM_PLAYER;
 				}
 				
-				if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1)
+				if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1 && StrContains(key, "!") != 0)
 				{
 					if(GetGameSoundParams(key, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 						size = strlen(sound.Sound);
@@ -2973,7 +3037,7 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 			{
 				if(strlen(key) > val.size)	// "example.mp3"	""
 				{
-					if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1)
+					if(StrContains(key, SndExts[0]) == -1 && StrContains(key, SndExts[1]) == -1 && StrContains(key, "!") != 0)
 					{
 						if(GetGameSoundParams(key, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 							size = strlen(sound.Sound);
@@ -3022,7 +3086,7 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 					
 					size = strcopy(sound.Sound, sizeof(sound.Sound), val.data);
 					
-					if(StrContains(sound.Sound, SndExts[0]) == -1 && StrContains(sound.Sound, SndExts[1]) == -1)
+					if(StrContains(sound.Sound, SndExts[0]) == -1 && StrContains(sound.Sound, SndExts[1]) == -1 && StrContains(sound.Sound, "!") != 0)
 					{
 						if(GetGameSoundParams(sound.Sound, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 							size = strlen(sound.Sound);
@@ -3040,7 +3104,7 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 	return size;
 }
 
-bool Bosses_PlaySound(int boss, const int[] clients, int numClients, const char[] key, const char[] required = NULL_STRING, int entity = SOUND_FROM_PLAYER, int channel = SNDCHAN_AUTO, int level = SNDLEVEL_NORMAL, int flags = SND_NOFLAGS, float volume = SNDVOL_NORMAL, int pitch = SNDPITCH_NORMAL, int speakerentity = -1, const float origin[3]=NULL_VECTOR, const float dir[3]=NULL_VECTOR, bool updatePos = true, float soundtime = 0.0)
+bool Bosses_PlaySound(int boss, const int[] clients, int numClients, const char[] key, const char[] required = NULL_STRING, int entity = SOUND_FROM_PLAYER, int channel = SNDCHAN_AUTO, int level = SNDLEVEL_NORMAL, int flags = SND_NOFLAGS, float volume = SNDVOL_NORMAL, int pitch = SNDPITCH_NORMAL, int speakerentity = -1, const float origin[3] = NULL_VECTOR, const float dir[3] = NULL_VECTOR, bool updatePos = true, float soundtime = 0.0)
 {
 	SoundEnum sound;
 	sound.Entity = entity;

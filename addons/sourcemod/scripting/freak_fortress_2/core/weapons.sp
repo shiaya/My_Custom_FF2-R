@@ -10,15 +10,20 @@
 static bool Loaded;
 #endif
 
+#if defined IS_MAIN_FF2
+static bool InMenu[MAXTF2PLAYERS];
 static ArrayList LoadoutList;
+#endif
 
 void Weapons_PluginStart()
 {
+	#if defined IS_MAIN_FF2
 	RegFreakCmd("classinfo", Weapons_ChangeMenuCmd, "View Weapon Changes", FCVAR_HIDDEN);
 	RegFreakCmd("weapons", Weapons_ChangeMenuCmd, "View Weapon Changes");
 	RegFreakCmd("weapon", Weapons_ChangeMenuCmd, "View Weapon Changes", FCVAR_HIDDEN);
 	RegAdminCmd("ff2_refresh", Weapons_DebugRefresh, ADMFLAG_CHEATS, "Refreshes weapons and attributes");
 	RegAdminCmd("ff2_reloadweapons", Weapons_DebugReload, ADMFLAG_RCON, "Reloads the weapons config");
+	#endif
 	
 	#if defined __cwx_included
 	Loaded = LibraryExists(CWX_LIBRARY);
@@ -41,7 +46,7 @@ public void Weapons_LibraryRemoved(const char[] name)
 	#endif
 }
 
-void Weapons_PrintStatus()
+stock void Weapons_PrintStatus()
 {
 	#if defined __cwx_included
 	PrintToServer("'%s' is %sloaded", CWX_LIBRARY, Loaded ? "" : "not ");
@@ -50,375 +55,19 @@ void Weapons_PrintStatus()
 	#endif
 }
 
-static Action Weapons_DebugRefresh(int client, int args)
-{
-	if(client)
-	{
-		TF2_RemoveAllItems(client);
-		
-		int entity, i;
-		while(TF2U_GetWearable(client, entity, i))
-		{
-			TF2Tools_RemoveWearable(client, entity);
-		}
-		
-		TF2Tools_RegeneratePlayer(client);
-	}
-	else
-	{
-		ReplyToCommand(client, "[SM] %t", "Command is in-game only");
-	}
-	return Plugin_Handled;
-}
-
-static Action Weapons_DebugReload(int client, int args)
-{
-	if(Weapons_ConfigsExecuted(true))
-	{
-		FReplyToCommand(client, "Reloaded");
-
-		for(int target = 1; target <= MaxClients; target++)
-		{
-			if(IsClientInGame(target) && !Client(target).IsBoss && !Client(target).MinionType)
-			{
-				TF2_RemoveAllItems(target);
-				
-				int entity, i;
-				while(TF2U_GetWearable(target, entity, i))
-				{
-					TF2Tools_RemoveWearable(target, entity);
-				}
-				
-				TF2Tools_RegeneratePlayer(target);
-			}
-		}
-	}
-	else if(client && CheckCommandAccess(client, "sm_rcon", ADMFLAG_RCON))
-	{
-		FReplyToCommand(client, "Config Error, use sm_rcon to print errors");
-	}
-	else
-	{
-		FReplyToCommand(client, "Config Error");
-	}
-	return Plugin_Handled;
-}
-
-static Action Weapons_ChangeMenuCmd(int client, int args)
-{
-	if(client)
-	{
-		Menu_Command(client);
-		Weapons_ChangeMenu(client);
-	}
-	else
-	{
-		ReplyToCommand(client, "[SM] %t", "Command is in-game only");
-	}
-	return Plugin_Handled;
-}
-
-bool Weapons_ConfigsExecuted(bool force = false)
-{
-	if(LoadoutList)
-	{
-		int length = LoadoutList.Length;
-		for(int i; i < length; i++)
-		{
-			DeleteCfg(LoadoutList.Get(i));
-		}
-
-		delete LoadoutList;
-	}
-
-	if(Enabled || force)
-	{
-		ConfigMap cfg = new ConfigMap(FILE_WEAPONS);
-		if(!cfg)
-			return false;
-
-		StringMapSnapshot snap = cfg.Snapshot();
-
-		int entries = snap.Length;
-		if(entries)
-		{
-			char buffer[PLATFORM_MAX_PATH];
-
-			LoadoutList = new ArrayList();
-
-			PackVal val;
-			for(int i = 0; i < entries; i++)
-			{
-				int length = snap.KeyBufferSize(i) + 1;
-
-				char[] key = new char[length];
-				snap.GetKey(i, key, length);
-
-				cfg.GetArray(key, val, sizeof(val));
-
-				if(val.tag == KeyValType_Section && val.cfg)
-				{
-					FormatEx(buffer, sizeof(buffer), "data/freak_fortress_2/%s.cfg", key);
-					ConfigMap loadout = new ConfigMap(buffer);
-					if(loadout)
-					{
-						loadout.Set("key", key);
-						loadout.Set("name", key);
-						ImportValuesIntoConfigMap(val.cfg, loadout);
-
-						int pos = LoadoutList.Push(loadout);
-						
-						if(LoadoutList.Length > 1)
-						{
-							bool defaul;
-							if(val.cfg.GetBool("default", defaul, false) && defaul)
-							{
-								LoadoutList.SwapAt(0, pos);
-							}
-						}
-					}
-				}
-			}
-
-			if(!LoadoutList.Length)
-				delete LoadoutList;
-		}
-
-		delete snap;
-		DeleteCfg(cfg);
-	}
-	
-	return true;
-}
-
-bool Weapons_ConfigEnabled()
-{
-	return view_as<bool>(LoadoutList);
-}
-
-void Weapons_ChangeMenu(int client, int time = MENU_TIME_FOREVER, int page = 0)
-{
-	if(Client(client).IsBoss)
-	{
-		char buffer[512];
-		if(Bosses_GetBossNameCfg(Client(client).Cfg, buffer, sizeof(buffer), GetClientLanguage(client), "description"))
-		{
-			Menu menu = new Menu(Weapons_ChangeMenuH);
-			
-			menu.SetTitle(buffer);
-			
-			if(time == MENU_TIME_FOREVER && Menu_BackButton(client))
-			{
-				FormatEx(buffer, sizeof(buffer), "%t", "Back");
-				menu.AddItem(NULL_STRING, buffer);
-			}
-			else
-			{
-				menu.AddItem(NULL_STRING, buffer, ITEMDRAW_SPACER);
-			}
-			
-			menu.Display(client, time);
-		}
-	}
-	else if(Weapons_ConfigEnabled() && Client(client).MinionType != 1)
-	{
-		SetGlobalTransTarget(client);
-		
-		Menu menu = new Menu(Weapons_ChangeMenuH);
-		
-		char buffer1[32], buffer2[32], loadout[32];
-		Client(client).GetLoadout(loadout, sizeof(loadout));
-		int loadouts = LoadoutList.Length;
-
-		if(loadouts > 1)
-		{
-			ConfigMap cfg = FindMatchingLoadout(loadout);
-			
-			int lang = GetClientLanguage(client);
-			if(lang != -1)
-			{
-				GetLanguageInfo(lang, buffer1, sizeof(buffer1));
-				Format(buffer1, sizeof(buffer1), "name_%s", buffer1);
-				if(!cfg.Get(buffer1, buffer2, sizeof(buffer2)))
-					cfg.Get("name", buffer2, sizeof(buffer2));
-			}
-			else
-			{
-				cfg.Get("name", buffer2, sizeof(buffer2));
-			}
-
-			menu.SetTitle("%t", "Weapon Menu Variant", buffer2);
-		}
-		else
-		{
-			menu.SetTitle("%t", "Weapon Menu");
-		}
-		
-		static const char SlotNames[][] = { "Primary", "Secondary", "Melee", "PDA", "Utility", "Building", "Action" };
-		for(int i; i < sizeof(SlotNames); i++)
-		{
-			FormatEx(buffer2, sizeof(buffer2), "%t", SlotNames[i]);
-			
-			int entity = TF2U_GetPlayerLoadoutEntity(client, i);
-			
-			if(entity != -1 && FindWeaponSection(entity, loadout, _, client))
-			{
-				IntToString(EntIndexToEntRef(entity), buffer1, sizeof(buffer1));
-				menu.AddItem(buffer1, buffer2);
-			}
-			else
-			{
-				menu.AddItem(buffer1, buffer2, ITEMDRAW_DISABLED);
-			}
-		}
-		
-		if(loadouts > 1)
-		{
-			FormatEx(buffer2, sizeof(buffer2), "%t\n ", Client(client).NoChanges ? "Enable Weapon Changes" : "Disable Weapon Changes");
-			menu.AddItem(NULL_STRING, buffer2);
-
-			for(int i; i < loadouts; i++)
-			{
-				ConfigMap cfg = LoadoutList.Get(i);
-				
-				int lang = GetClientLanguage(client);
-				if(lang != -1)
-				{
-					GetLanguageInfo(lang, buffer1, sizeof(buffer1));
-					Format(buffer1, sizeof(buffer1), "name_%s", buffer1);
-					if(!cfg.Get(buffer1, buffer2, sizeof(buffer2)))
-						cfg.Get("name", buffer2, sizeof(buffer2));
-				}
-				else
-				{
-					cfg.Get("name", buffer2, sizeof(buffer2));
-				}
-
-				cfg.Get("key", buffer1, sizeof(buffer1));
-				
-				menu.AddItem(buffer1, buffer2, StrEqual(buffer1, loadout) ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
-			}
-
-			menu.ExitBackButton = (time == MENU_TIME_FOREVER && Menu_BackButton(client));
-			menu.ExitButton = true;
-			menu.DisplayAt(client, page / 7 * 7, time);
-		}
-		else
-		{
-			if(time == MENU_TIME_FOREVER && Menu_BackButton(client))
-			{
-				FormatEx(buffer2, sizeof(buffer2), "%t", "Back");
-				menu.AddItem(NULL_STRING, buffer2);
-			}
-			else
-			{
-				menu.AddItem(NULL_STRING, buffer1, ITEMDRAW_SPACER);
-			}
-			
-			FormatEx(buffer2, sizeof(buffer2), "%t", Client(client).NoChanges ? "Enable Weapon Changes" : "Disable Weapon Changes");
-			menu.AddItem("__nochanges", buffer2);
-			
-			menu.Pagination = 0;
-			menu.ExitButton = true;
-			menu.Display(client, time);
-		}
-	}
-}
-
-static int Weapons_ChangeMenuH(Menu menu, MenuAction action, int client, int choice)
-{
-	switch(action)
-	{
-		case MenuAction_End:
-		{
-			delete menu;
-		}
-		case MenuAction_Cancel:
-		{
-			if(choice == MenuCancel_ExitBack)
-				Menu_MainMenu(client);
-		}
-		case MenuAction_Select:
-		{
-			char buffer[32];
-			menu.GetItem(choice, buffer, sizeof(buffer));
-			if(buffer[0])
-			{
-				if(StrEqual(buffer, "__nochanges"))
-				{
-					Client(client).NoChanges = !Client(client).NoChanges;
-					Weapons_ChangeMenu(client, _, choice);
-				}
-				else if(choice < 7)
-				{
-					int entity = EntRefToEntIndex(StringToInt(buffer));
-					if(entity != INVALID_ENT_REFERENCE)
-						Weapons_ShowChanges(client, entity);
-					
-					Weapons_ChangeMenu(client, _, choice);
-				}
-				else if(!Client(client).IsBoss && !Client(client).MinionType)
-				{
-					Client(client).SetLoadout(buffer);
-
-					if(!Enabled)
-					{
-
-					}
-					else if(RoundStatus < 1)
-					{
-						TF2_RemoveAllItems(client);
-						TF2Tools_RespawnPlayer(client);
-					}
-					else
-					{
-						int entity, i;
-						while(TF2_GetItem(client, entity, i))
-						{
-							if(IsPlayerAlive(client))
-							{
-								SetEntProp(entity, Prop_Send, "m_iAccountID", 0);
-							}
-							else
-							{
-								TF2_RemoveItem(client, entity);
-							}
-						}
-
-						i = 0;
-						while(TF2U_GetWearable(client, entity, i))
-						{
-							if(IsPlayerAlive(client))
-							{
-								SetEntProp(entity, Prop_Send, "m_iAccountID", 0);
-							}
-							else
-							{
-								TF2Tools_RemoveWearable(client, entity);
-							}
-						}
-
-						Weapons_ChangeMenu(client, _, choice);
-					}
-				}
-			}
-			else
-			{
-				Menu_MainMenu(client);
-			}
-		}
-	}
-	return 0;
-}
-
 void Weapons_ShowChanges(int client, int entity)
 {
 	if(!Weapons_ConfigEnabled())
 		return;
 	
-	char cwx[64], loadout[32];
+	char cwx[64];
+	#if defined IS_MAIN_FF2
+	char loadout[32];
 	Client(client).GetLoadout(loadout, sizeof(loadout));
 	ConfigMap cfg = FindWeaponSection(entity, loadout, cwx, client);
+	#else
+	ConfigMap cfg = FindWeaponSection(entity, cwx, client);
+	#endif
 
 	if(!cfg)
 		return;
@@ -567,7 +216,7 @@ void Weapons_ShowChanges(int client, int entity)
 			
 			cfg.GetArray(key, val, sizeof(val));
 
-			if(val.tag == KeyValType_Value && TranslationPhraseExists(key))
+			if(val.tag == KeyValType_Value && !StrEqual(val.data, "R") && TranslationPhraseExists(key))
 			{
 				FormatValue(val.data, value, sizeof(value), "value_is_percentage");
 				FormatValue(val.data, desc, sizeof(desc), "value_is_inverted_percentage");
@@ -664,8 +313,19 @@ void Weapons_EntityCreated(int entity, const char[] classname)
 
 static void Weapons_Spawn(int entity)
 {
+	#if defined IS_MAIN_FF2
 	RequestFrame(Weapons_SpawnFrame, EntIndexToEntRef(entity));
+	#else
+	RequestFrame(Weapons_SpawnSubFrame, EntIndexToEntRef(entity));
+	#endif
 }
+
+#if !defined IS_MAIN_FF2
+static void Weapons_SpawnSubFrame(int ref)
+{
+	RequestFrame(Weapons_SpawnFrame, ref);
+}
+#endif
 
 static void Weapons_SpawnFrame(int ref)
 {
@@ -681,19 +341,38 @@ static void Weapons_SpawnFrame(int ref)
 		return;
 	
 	int client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
-	if(client < 1 || client > MaxClients || Client(client).IsBoss || Client(client).MinionType == 1)
+	if(client < 1 || client > MaxClients)
 		return;
 	
+	#if defined IS_MAIN_FF2
+	if(Client(client).IsBoss || Client(client).MinionType == 1)
+	#else
+	if(FF2R_GetBossData(client) || FF2R_GetClientMinion(client))
+	#endif
+		return;
+
+	#if defined IS_MAIN_FF2
 	bool temp;
 	char loadout[32];
 	Client(client).GetLoadout(loadout, sizeof(loadout));
 	ConfigMap cfg = FindWeaponSection(entity, loadout, _, client, temp);
+	#else
+	bool temp = true;
+	ConfigMap cfg = FindWeaponSection(entity, _, client);
+	#endif
+
 	if(!cfg)
 		return;
 	
 	bool found;
 	if(cfg.GetBool("strip", found, false) && found)
+	{
 		SetEntProp(entity, Prop_Send, "m_bOnlyIterateItemViewAttributes", true);
+
+		#if !defined IS_MAIN_FF2
+		Attrib_RemoveAll(entity);
+		#endif
+	}
 	
 	int current;
 	
@@ -772,7 +451,20 @@ static void Weapons_SpawnFrame(int ref)
 				cfg.GetArray(key, attributeValue, sizeof(attributeValue));
 
 				if(attributeValue.tag == KeyValType_Value)
-					Attrib_SetString(entity, key, _, attributeValue.data);
+				{
+					if(StrEqual(attributeValue.data, "R"))
+					{
+						#if defined IS_MAIN_FF2
+						Attrib_Set(entity, key, _, 0.0);
+						#else
+						Attrib_Remove(entity, key);
+						#endif
+					}
+					else
+					{
+						Attrib_SetString(entity, key, _, attributeValue.data);
+					}
+				}
 			}
 
 			delete snap;
@@ -782,28 +474,23 @@ static void Weapons_SpawnFrame(int ref)
 	cfg = cfg.GetSection("custom");
 	if(cfg)
 		CustomAttrib_ApplyFromCfg(entity, cfg);
+	
+	VScript_WeaponChanged(client, entity);
 }
 
-static ConfigMap FindMatchingLoadout(const char[] loadou)
-{
-	static char buffer[32];
-
-	ConfigMap cfg;
-	for(int i = LoadoutList.Length - 1; i >= 0; i--)
-	{
-		cfg = LoadoutList.Get(i);
-		if(cfg.Get("key", buffer, sizeof(buffer)) && StrEqual(buffer, loadou))
-			break;
-	}
-
-	return cfg;
-}
-
+#if defined IS_MAIN_FF2
 static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64] = "", int client = 0, bool &temp = false)
+#else
+static ConfigMap FindWeaponSection(int entity, char cwx[64] = "", int client = 0)
+#endif
 {
 	char buffer1[64];
 
+	#if defined IS_MAIN_FF2
 	ConfigMap loadout = FindMatchingLoadout(loadou);
+	#else
+	ConfigMap loadout = FindMatchingLoadout();
+	#endif
 	
 	#if defined __cwx_included
 	if(Loaded && CWX_GetItemUIDFromEntity(entity, cwx, sizeof(cwx)) && CWX_IsItemUIDValid(cwx))
@@ -811,13 +498,23 @@ static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64]
 		Format(buffer1, sizeof(buffer1), "CWX.%s", cwx);
 		ConfigMap cfg = loadout.GetSection(buffer1);
 		if(cfg)
+		{
+			#if defined IS_MAIN_FF2
 			return FindClassSection(cfg, client, temp);
+			#else
+			return FindClassSection(cfg, client);
+			#endif
+		}
 	}
 	#endif
 	
 	cwx[0] = 0;
 	
+	#if defined IS_MAIN_FF2
 	if(client && Client(client).MinionType == 2)
+	#else
+	if(client && FF2R_GetClientMinion(client) == 2)
+	#endif
 		return loadout.GetSection("Classnames.ff2_weapon_teuton");
 
 	ConfigMap cfg = loadout.GetSection("Indexes");
@@ -858,7 +555,11 @@ static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64]
 						if(val.tag == KeyValType_Section)
 						{
 							delete snap;
+							#if defined IS_MAIN_FF2
 							return FindClassSection(val.cfg, client, temp);
+							#else
+							return FindClassSection(val.cfg, client);
+							#endif
 						}
 						
 						break;
@@ -874,16 +575,26 @@ static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64]
 	Format(buffer1, sizeof(buffer1), "Classnames.%s", buffer1);
 	cfg = loadout.GetSection(buffer1);
 	if(cfg)
+	{
+		#if defined IS_MAIN_FF2
 		return FindClassSection(cfg, client, temp);
+		#else
+		return FindClassSection(cfg, client);
+		#endif
+	}
 	
 	return null;
 }
 
+#if defined IS_MAIN_FF2
 static ConfigMap FindClassSection(ConfigMap cfg, int client, bool &temp)
+#else
+static ConfigMap FindClassSection(ConfigMap cfg, int client)
+#endif
 {
 	if(client)
 	{
-		TFClassType class = Client(client).IsBoss ? TFClass_Unknown : TF2_GetPlayerClass(client);
+		TFClassType class = TF2_GetPlayerClass(client);
 
 		char classname[16];
 		TF2Tools_GetClassName(class, classname, sizeof(classname));
@@ -891,18 +602,412 @@ static ConfigMap FindClassSection(ConfigMap cfg, int client, bool &temp)
 		ConfigMap section = cfg.GetSection(classname);
 		if(section)
 		{
+			#if defined IS_MAIN_FF2
 			temp = true;
+			#endif
 			return section;
 		}
 		
 		section = cfg.GetSection("other");
 		if(section)
 		{
+			#if defined IS_MAIN_FF2
 			temp = true;
+			#endif
 			return section;
 		}
 	}
 
+	#if defined IS_MAIN_FF2
 	temp = false;
+	#endif
 	return cfg;
+}
+
+#if !defined IS_MAIN_FF2
+	#endinput
+#endif
+
+static ConfigMap FindMatchingLoadout(const char[] loadou)
+{
+	static char buffer[32];
+
+	ConfigMap cfg;
+	for(int i = LoadoutList.Length - 1; i >= 0; i--)
+	{
+		cfg = LoadoutList.Get(i);
+		if(cfg.Get("key", buffer, sizeof(buffer)) && StrEqual(buffer, loadou))
+			break;
+	}
+
+	return cfg;
+}
+
+static Action Weapons_DebugRefresh(int client, int args)
+{
+	if(client)
+	{
+		TF2_RemoveAllItems(client);
+		
+		int entity, i;
+		while(TF2U_GetWearable(client, entity, i))
+		{
+			TF2Tools_RemoveWearable(client, entity);
+		}
+		
+		TF2Tools_RegeneratePlayer(client);
+	}
+	else
+	{
+		ReplyToCommand(client, "[SM] %t", "Command is in-game only");
+	}
+	return Plugin_Handled;
+}
+
+static Action Weapons_DebugReload(int client, int args)
+{
+	if(Weapons_ConfigsExecuted(true))
+	{
+		FReplyToCommand(client, "Reloaded");
+
+		for(int target = 1; target <= MaxClients; target++)
+		{
+			if(IsClientInGame(target) && !Client(target).IsBoss && !Client(target).MinionType)
+			{
+				TF2_RemoveAllItems(target);
+				
+				int entity, i;
+				while(TF2U_GetWearable(target, entity, i))
+				{
+					TF2Tools_RemoveWearable(target, entity);
+				}
+				
+				TF2Tools_RegeneratePlayer(target);
+			}
+		}
+	}
+	else if(client && CheckCommandAccess(client, "sm_rcon", ADMFLAG_RCON))
+	{
+		FReplyToCommand(client, "Config Error, use sm_rcon to print errors");
+	}
+	else
+	{
+		FReplyToCommand(client, "Config Error");
+	}
+	return Plugin_Handled;
+}
+
+static Action Weapons_ChangeMenuCmd(int client, int args)
+{
+	if(client)
+	{
+		Menu_Command(client);
+		Weapons_ChangeMenu(client);
+	}
+	else
+	{
+		ReplyToCommand(client, "[SM] %t", "Command is in-game only");
+	}
+	return Plugin_Handled;
+}
+
+bool Weapons_ConfigsExecuted(bool force = false)
+{
+	if(LoadoutList)
+	{
+		int length = LoadoutList.Length;
+		for(int i; i < length; i++)
+		{
+			DeleteCfg(LoadoutList.Get(i));
+		}
+
+		delete LoadoutList;
+	}
+
+	if(Enabled || force)
+	{
+		ConfigMap cfg = new ConfigMap(FILE_WEAPONS);
+		if(!cfg)
+			return false;
+
+		StringMapSnapshot snap = cfg.Snapshot();
+
+		int entries = snap.Length;
+		if(entries)
+		{
+			char buffer[PLATFORM_MAX_PATH];
+
+			LoadoutList = new ArrayList();
+
+			PackVal val;
+			for(int i = 0; i < entries; i++)
+			{
+				int length = snap.KeyBufferSize(i) + 1;
+
+				char[] key = new char[length];
+				snap.GetKey(i, key, length);
+
+				cfg.GetArray(key, val, sizeof(val));
+
+				if(val.tag == KeyValType_Section && val.cfg)
+				{
+					FormatEx(buffer, sizeof(buffer), "data/freak_fortress_2/%s.cfg", key);
+					ConfigMap loadout = new ConfigMap(buffer);
+					if(loadout)
+					{
+						loadout.Set("key", key);
+						loadout.Set("name", key);
+						ImportValuesIntoConfigMap(val.cfg, loadout);
+
+						int pos = LoadoutList.Push(loadout);
+						
+						if(LoadoutList.Length > 1)
+						{
+							bool defaul;
+							if(val.cfg.GetBool("default", defaul, false) && defaul)
+							{
+								LoadoutList.SwapAt(0, pos);
+							}
+						}
+					}
+				}
+			}
+
+			if(!LoadoutList.Length)
+				delete LoadoutList;
+		}
+
+		delete snap;
+		DeleteCfg(cfg);
+	}
+	
+	return true;
+}
+
+bool Weapons_ConfigEnabled()
+{
+	return view_as<bool>(LoadoutList);
+}
+
+bool Weapons_InMenu(int client)
+{
+	return InMenu[client];
+}
+
+void Weapons_ChangeMenu(int client, int time = MENU_TIME_FOREVER, int page = 0)
+{
+	if(Client(client).IsBoss)
+	{
+		char buffer[512];
+		if(Bosses_GetBossNameCfg(Client(client).Cfg, buffer, sizeof(buffer), GetClientLanguage(client), "description"))
+		{
+			Menu menu = new Menu(Weapons_ChangeMenuH);
+			
+			menu.SetTitle(buffer);
+			
+			if(time == MENU_TIME_FOREVER && Menu_BackButton(client))
+			{
+				FormatEx(buffer, sizeof(buffer), "%t", "Back");
+				menu.AddItem(NULL_STRING, buffer);
+			}
+			else
+			{
+				menu.AddItem(NULL_STRING, buffer, ITEMDRAW_SPACER);
+			}
+			
+			InMenu[client] = menu.Display(client, time);
+		}
+	}
+	else if(Weapons_ConfigEnabled() && Client(client).MinionType != 1)
+	{
+		SetGlobalTransTarget(client);
+		
+		Menu menu = new Menu(Weapons_ChangeMenuH);
+		
+		char buffer1[32], buffer2[32], loadout[32];
+		Client(client).GetLoadout(loadout, sizeof(loadout));
+		int loadouts = LoadoutList.Length;
+
+		if(loadouts > 1)
+		{
+			ConfigMap cfg = FindMatchingLoadout(loadout);
+			
+			int lang = GetClientLanguage(client);
+			if(lang != -1)
+			{
+				GetLanguageInfo(lang, buffer1, sizeof(buffer1));
+				Format(buffer1, sizeof(buffer1), "name_%s", buffer1);
+				if(!cfg.Get(buffer1, buffer2, sizeof(buffer2)))
+					cfg.Get("name", buffer2, sizeof(buffer2));
+			}
+			else
+			{
+				cfg.Get("name", buffer2, sizeof(buffer2));
+			}
+
+			menu.SetTitle("%t", "Weapon Menu Variant", buffer2);
+		}
+		else
+		{
+			menu.SetTitle("%t", "Weapon Menu");
+		}
+		
+		static const char SlotNames[][] = { "Primary", "Secondary", "Melee", "PDA", "Utility", "Building", "Action" };
+		for(int i; i < sizeof(SlotNames); i++)
+		{
+			FormatEx(buffer2, sizeof(buffer2), "%t", SlotNames[i]);
+			
+			int entity = TF2U_GetPlayerLoadoutEntity(client, i);
+			
+			if(entity != -1 && FindWeaponSection(entity, loadout, _, client))
+			{
+				IntToString(EntIndexToEntRef(entity), buffer1, sizeof(buffer1));
+				menu.AddItem(buffer1, buffer2);
+			}
+			else
+			{
+				menu.AddItem(buffer1, buffer2, ITEMDRAW_DISABLED);
+			}
+		}
+		
+		if(loadouts > 1)
+		{
+			FormatEx(buffer2, sizeof(buffer2), "%t\n ", Client(client).NoChanges ? "Enable Weapon Changes" : "Disable Weapon Changes");
+			menu.AddItem("__nochanges", buffer2);
+
+			for(int i; i < loadouts; i++)
+			{
+				ConfigMap cfg = LoadoutList.Get(i);
+				
+				int lang = GetClientLanguage(client);
+				if(lang != -1)
+				{
+					GetLanguageInfo(lang, buffer1, sizeof(buffer1));
+					Format(buffer1, sizeof(buffer1), "name_%s", buffer1);
+					if(!cfg.Get(buffer1, buffer2, sizeof(buffer2)))
+						cfg.Get("name", buffer2, sizeof(buffer2));
+				}
+				else
+				{
+					cfg.Get("name", buffer2, sizeof(buffer2));
+				}
+
+				cfg.Get("key", buffer1, sizeof(buffer1));
+				
+				menu.AddItem(buffer1, buffer2, StrEqual(buffer1, loadout) ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
+			}
+
+			menu.ExitBackButton = (time == MENU_TIME_FOREVER && Menu_BackButton(client));
+			menu.ExitButton = true;
+			InMenu[client] = menu.DisplayAt(client, page / 7 * 7, time);
+		}
+		else
+		{
+			if(time == MENU_TIME_FOREVER && Menu_BackButton(client))
+			{
+				FormatEx(buffer2, sizeof(buffer2), "%t", "Back");
+				menu.AddItem(NULL_STRING, buffer2);
+			}
+			else
+			{
+				menu.AddItem(NULL_STRING, buffer1, ITEMDRAW_SPACER);
+			}
+			
+			FormatEx(buffer2, sizeof(buffer2), "%t", Client(client).NoChanges ? "Enable Weapon Changes" : "Disable Weapon Changes");
+			menu.AddItem("__nochanges", buffer2);
+			
+			menu.Pagination = 0;
+			menu.ExitButton = true;
+			InMenu[client] = menu.Display(client, time);
+		}
+	}
+}
+
+static int Weapons_ChangeMenuH(Menu menu, MenuAction action, int client, int choice)
+{
+	switch(action)
+	{
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+		case MenuAction_Cancel:
+		{
+			InMenu[client] = false;
+			if(choice == MenuCancel_ExitBack)
+				Menu_MainMenu(client);
+		}
+		case MenuAction_Select:
+		{
+			InMenu[client] = false;
+			
+			char buffer[32];
+			menu.GetItem(choice, buffer, sizeof(buffer));
+			if(buffer[0])
+			{
+				if(StrEqual(buffer, "__nochanges"))
+				{
+					Client(client).NoChanges = !Client(client).NoChanges;
+					Weapons_ChangeMenu(client, _, choice);
+				}
+				else if(choice < 7)
+				{
+					int entity = EntRefToEntIndex(StringToInt(buffer));
+					if(entity != INVALID_ENT_REFERENCE)
+						Weapons_ShowChanges(client, entity);
+					
+					Weapons_ChangeMenu(client, _, choice);
+				}
+				else if(!Client(client).IsBoss && !Client(client).MinionType)
+				{
+					Client(client).SetLoadout(buffer);
+
+					if(!Enabled)
+					{
+
+					}
+					else if(RoundStatus < 1)
+					{
+						TF2_RemoveAllItems(client);
+						TF2Tools_RespawnPlayer(client);
+					}
+					else
+					{
+						int entity, i;
+						while(TF2_GetItem(client, entity, i))
+						{
+							if(IsPlayerAlive(client))
+							{
+								SetEntProp(entity, Prop_Send, "m_iAccountID", 0);
+							}
+							else
+							{
+								TF2_RemoveItem(client, entity);
+							}
+						}
+
+						i = 0;
+						while(TF2U_GetWearable(client, entity, i))
+						{
+							if(IsPlayerAlive(client))
+							{
+								SetEntProp(entity, Prop_Send, "m_iAccountID", 0);
+							}
+							else
+							{
+								TF2Tools_RemoveWearable(client, entity);
+							}
+						}
+
+						Weapons_ChangeMenu(client, _, choice);
+					}
+				}
+			}
+			else
+			{
+				Menu_MainMenu(client);
+			}
+		}
+	}
+	return 0;
 }
