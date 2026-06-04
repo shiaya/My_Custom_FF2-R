@@ -257,6 +257,27 @@ forward void FF2R_OnBossEquipped(int client, bool weapons);
 forward void FF2R_OnRankChange(int client, const char[] filename, int oldRank, int newRank);
 
 /**
+ * Called when a player attempts to open a specific FF2 menu
+ * 
+ * @param client	Client index
+ * @param id		ID name (see source files for references)
+ * 
+ * @return		Plugin_Handled/Plugin_Stop to prevent the menu from opening
+ */
+forward Action FF2R_OnMenuOpenPre(int client, const char[] name);
+
+/**
+ * Called when a player opens a specific FF2 menu
+ * 
+ * @param client	Client index
+ * @param id		ID name (see source files for references)
+ * @param menu		Menu handle (don't close)
+ * 
+ * @noreturn
+ */
+forward void FF2R_OnMenuOpenPost(int client, const char[] name, Menu menu);
+
+/**
  * Wrapper to emit sound to one client.
  * 
  * @param client		Client index
@@ -327,6 +348,31 @@ stock bool FF2R_EmitBossSoundToAll(const char[] key, int boss, const char[] requ
 	return FF2R_EmitBossSound(clients, total, key, boss, required, entity, channel, level, flags, volume, pitch, speakerentity, origin, dir, updatePos, soundtime);
 }
 
+/**
+ *  If a client isn't specified, stops any currently playing music for all players.
+ *  If a client was specified, stops any currently playing music for that player only.
+ *  Does not play any other music after it's called. Best used with FF2R_PlayMusic(); 
+ *
+ *  @param client    Client index, 0 for all players
+ *	@noreturn
+ */
+native void FF2R_StopMusic(int client = 0);
+
+/**
+ *  Plays music for all clients or a specific client only.
+ *  If no index is given, plays the next song based on the client's current shuffle state.
+ *  If an index is given, plays that specific music from the playlist.
+ *  If shuffle is disabled, plays the next song of the current boss's bgm's.
+ *  If shuffle is enabled, plays the next song from the playlist.
+ *  Does not permanently change any player's settings.
+ *
+ *  @param client           Client index, 0 for all players
+ *  @param playlistindex    Specific playlist index to play, -1 for no specific music
+ *  @param shuffle          If true, forces shuffle for this call only
+ *  @noreturn
+ */
+native void FF2R_PlayMusic(int client = 0, int playlistindex = -1, bool shuffle = false);
+ 
 /**
  *	Below is related to using ConfigMap, though cfgmap is not required for this include, needed for the below
  */
@@ -966,5 +1012,7 @@ public void __pl_ff2r_SetNTVOptional()
 	MarkNativeAsOptional("FF2R_GetSpecialData");
 	MarkNativeAsOptional("FF2R_GetSpecialCount");
 	MarkNativeAsOptional("FF2R_CreateBoss");
+	MarkNativeAsOptional("FF2R_StopMusic");
+	MarkNativeAsOptional("FF2R_PlayMusic");
 }
 #endif
