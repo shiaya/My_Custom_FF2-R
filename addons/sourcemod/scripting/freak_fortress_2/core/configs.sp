@@ -4,6 +4,7 @@
 #define FILE_MAPS	"data/freak_fortress_2/maps.cfg"
 
 static bool VotedPack;
+static bool VoteCancel;
 static int TeamCount = 2;
 
 void Configs_AllPluginsLoaded()
@@ -11,11 +12,15 @@ void Configs_AllPluginsLoaded()
 	ConVar cvar = FindConVar("sm_nextmap");
 	if(cvar)
 		cvar.AddChangeHook(Configs_StartVote);
+	
+	RegAdminCmd("ff2_votepack", Command_StartVote, ADMFLAG_RCON, "Start VotedPack");
+	RegAdminCmd("ff2_setpack", Command_SelectPack, ADMFLAG_RCON, "Select Pack");
 }
 
 void Configs_MapStart()
 {
 	VotedPack = false;
+	VoteCancel = false;
 }
 
 bool Configs_MapIsGamemode(const char[] mapname)
@@ -168,6 +173,94 @@ bool Configs_SetMap(const char[] mapname)
 	return true;
 }
 
+static Action Command_SelectPack(int client, int args)
+{
+	if(args<1)
+	{
+		PrintToConsole(client, "Usage: ff2_setpack <int>");
+		return Plugin_Handled;
+	}
+	char buffer[64];
+	GetCmdArg(1, buffer, sizeof(buffer));
+	
+	int charset = StringToInt(buffer);
+	if(!Bosses_GetCharset(charset))
+	{
+		PrintToConsole(client, "[FF2] Pack Not Valid!");
+		return Plugin_Handled;
+	}
+	Cvar[NextCharset].IntValue = charset;
+	
+	GetCmdArg(2, buffer, sizeof(buffer));
+	bool Silent = (StringToInt(buffer)==1);
+	if(Silent)
+	{
+		if(IsClientInGame(client) && !IsFakeClient(client))
+		{
+			Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(client));
+			FPrintToChat(client, "%t", "Next Pack Voted", buffer);
+		}
+	}
+	else
+	{
+		for(int i = 1; i <= MaxClients; i++)
+		{
+			if(IsClientInGame(i) && !IsFakeClient(i))
+			{
+				Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(i));
+				FPrintToChat(i, "%t", "Next Pack Voted", buffer);
+			}
+		}
+	}
+	VotedPack=true;
+	VoteCancel=true;
+	return Plugin_Handled;
+}
+
+static Action Command_StartVote(int client, int args)
+{
+	if(args)
+	{
+		char arg[65];
+		GetCmdArg(1, arg, sizeof(arg));
+		if(StringToInt(arg)==1)
+		{
+			VotedPack = false;
+			VoteCancel = false;
+		}
+	}
+	
+	if((!VotedPack && Cvar[PackVotes].BoolValue))
+	{
+		ConfigMap pack;
+		int found;
+		bool hidden;
+		for(int i; (pack = Bosses_GetCharset(i)); i++)
+		{
+			if(pack.GetBool("hidden", hidden, false) && hidden)
+				continue;
+			
+			if(pack.GetBool("alwaysload", hidden, false) && hidden)
+				continue;
+			
+			if(found)
+			{
+				found = 2;
+				break;
+			}
+
+			found = 1;
+		}
+		
+		if(found > 1)
+		{
+			VotedPack = true;
+			RequestFrame(Configs_PackVoteFrame);
+		}
+	}
+	return Plugin_Handled;
+}
+
 static void Configs_StartVote(ConVar cvar, const char[] oldValue, const char[] newValue)
 {
 	if(!VotedPack && Cvar[PackVotes].BoolValue)
@@ -287,18 +380,21 @@ static int Configs_PackVoteH(Menu menu, MenuAction action, int param1, int param
 		}
 		case MenuAction_VoteEnd:
 		{
-			char buffer[64];
-			menu.GetItem(param1, buffer, sizeof(buffer));
-
-			int charset = StringToInt(buffer);
-			Cvar[NextCharset].IntValue = charset;
-
-			for(int client = 1; client <= MaxClients; client++)
+			if(!VoteCancel)
 			{
-				if(IsClientInGame(client) && !IsFakeClient(client))
+				char buffer[64];
+				menu.GetItem(param1, buffer, sizeof(buffer));
+
+				int charset = StringToInt(buffer);
+				Cvar[NextCharset].IntValue = charset;
+
+				for(int client = 1; client <= MaxClients; client++)
 				{
-					Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(client));
-					FPrintToChat(client, "%t", "Next Pack Voted", buffer);
+					if(IsClientInGame(client) && !IsFakeClient(client))
+					{
+						Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(client));
+						FPrintToChat(client, "%t", "Next Pack Voted", buffer);
+					}
 				}
 			}
 		}
