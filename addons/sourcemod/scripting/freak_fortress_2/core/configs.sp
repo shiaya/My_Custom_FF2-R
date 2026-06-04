@@ -192,13 +192,29 @@ static Action Command_SelectPack(int client, int args)
 	Cvar[NextCharset].IntValue = charset;
 	
 	GetCmdArg(2, buffer, sizeof(buffer));
-	bool Silent = (StringToInt(buffer)==1);
-	if(Silent)
+	GetCmdArg(2, buffer, sizeof(buffer));
+	if(StringToInt(buffer)==1)
 	{
 		if(IsClientInGame(client) && !IsFakeClient(client))
 		{
 			Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(client));
 			FPrintToChat(client, "%t", "Next Pack Voted", buffer);
+		}
+	}
+	else if(StringToInt(buffer)==2)
+	{
+		if(IsClientInGame(client) && !IsFakeClient(client))
+		{
+			Bosses_GetCharsetName(charset, buffer, sizeof(buffer), GetClientLanguage(client));
+			FPrintToChat(client, "%t", "Next Pack Voted", buffer);
+			ConfigMap pack = Bosses_GetCharset(charset);
+			
+			bool hidden=false;
+			if(pack.GetBool("hidden", hidden, false) && hidden)
+				FPrintToChat(client, "Is Hidden Pack");
+			hidden=false;
+			if(pack.GetBool("alwaysload", hidden, false) && hidden)
+				FPrintToChat(client, "Is AlwaysLoad Pack");
 		}
 	}
 	else
