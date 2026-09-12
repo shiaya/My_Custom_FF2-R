@@ -136,6 +136,8 @@ void Music_PlayerRunCmd(int client)
 		// If theme expired by time out, don't run StopSound code
 		CurrentTheme[client][0] = 0;
 		Music_PlayNextSong(client);
+		if(!CurrentTheme[client][0])
+			Forward_OnMusicStop(client);
 	}
 }
 
@@ -233,63 +235,87 @@ void Music_PlaySong(const int[] clients, int numClients, SoundEnum sound = {}, i
 		char sample2[PLATFORM_MAX_PATH];
 		strcopy(sample2, sizeof(sample2), sound.Sound);
 		ForwardOld_OnMusic(sample2, time, songName, songArtist, clients[0]);
-		
-		if(time)
-		{
-			time += GetGameTime();
-		}
-		else
-		{
-			time = FAR_FUTURE;
-		}
-		
+
 		int count = RoundToCeil(sound.Volume);
 		float vol = sound.Volume / float(count);
-		
-		int[] clients2 = new int[numClients];
-		int amount;
 
-		bool noName = !songName[0];
-		bool noArtist = !songArtist[0];
-		
 		for(int i; i < numClients; i++)
 		{
-			DeniedByFileNet[clients[i]] = !FileNet_HasFile(clients[i], sound.FileNet);
-			if(DeniedByFileNet[clients[i]])
+			int client = clients[i];
+
+			DeniedByFileNet[client] = !FileNet_HasFile(client, sound.FileNet);
+			if(DeniedByFileNet[client])
 				continue;
-			
-			if(songName[0] || songArtist[0])
+
+			char sample[PLATFORM_MAX_PATH];
+			strcopy(sample, sizeof(sample), sample2);
+			float clientTime = time;
+			char name[64], artist[64];
+			strcopy(name, sizeof(name), songName);
+			strcopy(artist, sizeof(artist), songArtist);
+
+			bool noMusic = Client(client).NoMusic;
+
+			if(!noMusic)
 			{
-				if(noName)
-					FormatEx(songName, sizeof(songName), "{default}%T", "Unknown Song", clients[i]);
-				
-				if(noArtist)
-					FormatEx(songArtist, sizeof(songArtist), "{default}%T", "Unknown Artist", clients[i]);
-				
-				FPrintToChat(clients[i], "%t", "Now Playing", songArtist, songName);
+				FF2RMusicInfo info;
+				strcopy(info.path, sizeof(info.path), sample);
+				info.duration = clientTime;
+				strcopy(info.name, sizeof(info.name), name);
+				strcopy(info.artist, sizeof(info.artist), artist);
+
+				Action action = Forward_OnMusicStart(client, info);
+				if(action >= Plugin_Handled)
+				{
+					CurrentTheme[client][0] = 0;
+					NextThemeAt[client] = FAR_FUTURE;
+					continue;
+				}
+
+				if(action == Plugin_Changed)
+				{
+					strcopy(sample, sizeof(sample), info.path);
+					clientTime = info.duration;
+					strcopy(name, sizeof(name), info.name);
+					strcopy(artist, sizeof(artist), info.artist);
+				}
 			}
-			
-			if(!Client(clients[i]).NoMusic)
+
+			if(name[0] || artist[0])
 			{
-				clients2[amount++] = clients[i];
-				strcopy(CurrentTheme[clients[i]], sizeof(CurrentTheme[]), sample2);
-				NextThemeAt[clients[i]] = time;
-				CurrentVolume[clients[i]] = count;
-				CurrentSource[clients[i]] = source;
+				if(!name[0])
+					FormatEx(name, sizeof(name), "{default}%T", "Unknown Song", client);
+
+				if(!artist[0])
+					FormatEx(artist, sizeof(artist), "{default}%T", "Unknown Artist", client);
+
+				FPrintToChat(client, "%t", "Now Playing", artist, name);
 			}
-		}
-		
-		for(int i; i < count; i++)
-		{
-			EmitSound(clients2, amount, sample2, _, SNDCHAN_STATIC, SNDLEVEL_NONE, _, vol, sound.Pitch);
+
+			if(!noMusic)
+			{
+				strcopy(CurrentTheme[client], sizeof(CurrentTheme[]), sample);
+				NextThemeAt[client] = clientTime ? clientTime + GetGameTime() : FAR_FUTURE;
+				CurrentVolume[client] = count;
+				CurrentSource[client] = source;
+
+				for(int c; c < count; c++)
+				{
+					EmitSoundToClient(client, sample, _, SNDCHAN_STATIC, SNDLEVEL_NONE, _, vol, sound.Pitch);
+				}
+			}
 		}
 	}
 	else
 	{
 		for(int i; i < numClients; i++)
 		{
-			CurrentTheme[clients[i]][0] = 0;
-			NextThemeAt[clients[i]] = FAR_FUTURE;
+			int client = clients[i];
+			bool wasPlaying = CurrentTheme[client][0] != 0;
+			CurrentTheme[client][0] = 0;
+			NextThemeAt[client] = FAR_FUTURE;
+			if(wasPlaying)
+				Forward_OnMusicStop(client);
 		}
 	}
 }

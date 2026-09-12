@@ -99,6 +99,11 @@ bool Preference_ShouldUpdate(int client)
 	return UpdateDataBase[client];
 }
 
+ArrayList Preference_GetBossListing(int client)
+{
+	return BossListing[client];
+}
+
 bool Preference_GetBoss(int client, int index, char[] buffer = "", int length = 0)
 {
 	if(!BossListing[client] || index >= BossListing[client].Length)
@@ -229,7 +234,9 @@ bool Preference_ValidBossSelection(int client, int team = -1)
 	if(BossOverride != -1 || !BossListing[client] || Cvar[PrefBlacklist].IntValue >= 0)
 		return true;
 	
-	bool foundBoss;
+	bool foundBoss, multiLoaded;
+	Bosses_MultipleCharsets(multiLoaded);
+
 	int length = BossListing[client].Length;
 	for(int i; i < length; i++)
 	{
@@ -242,7 +249,7 @@ bool Preference_ValidBossSelection(int client, int team = -1)
 			return true;
 	}
 
-	return !foundBoss;
+	return (!foundBoss || !multiLoaded);
 }
 
 int Preference_PickBoss(int client, int team = -1, bool raid = false)

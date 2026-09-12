@@ -10,6 +10,14 @@
 
 #define SNDVOL_BOSS	2.0
 
+enum struct FF2RMusicInfo
+{
+	char path[PLATFORM_MAX_PATH];
+	float duration;
+	char name[64];
+	char artist[64];
+}
+
 /**
  * Activates a range of abilities within slots
  * 
@@ -186,6 +194,15 @@ native void FF2R_SetClientAssist(int client, int assist);
 native int FF2R_GetSpecialCount();
 
 /**
+ * Gets the player's current boss list from preferences
+ * 
+ * @note			Negative indexes mean they have disabled playing on boss pack index (-1 - X)
+ *
+ * @return			ArrayList of boss indexes, null if blank (don't close)
+ */
+native ArrayList FF2R_GetClientListing(int client);
+
+/**
  * Called when a player spawns, dies, disconnects, etc.
  * 
  * @note		Players counted as minions aren't counted
@@ -221,6 +238,29 @@ forward void FF2R_OnAliveChanged2(const int[] alive, const int[] total, int team
  * @noreturn
  */
 forward void FF2R_OnBossRemoved(int client);
+
+/**
+ * Called when a client's music starts playing, before it is emitted
+ *
+ * @note			Fires per-client each time a theme is (re)started
+ *
+ * @param client	Client index
+ * @param info		Resolved music info
+ *
+ * @return			Plugin_Continue to play as resolved, Plugin_Changed to apply edits to info, Plugin_Handled or Plugin_Stop to cancel this client's playback
+ */
+forward Action FF2R_OnMusicStart(int client, FF2RMusicInfo info);
+
+/**
+ * Called when a client's music is stopped
+ *
+ * @note			Fires per-client when a playing theme is stopped (not on track change or replay)
+ *
+ * @param client	Client index
+ *
+ * @noreturn
+ */
+forward void FF2R_OnMusicStop(int client);
 
 /**
  * Called when a player tries to pick up a dropped item
@@ -276,7 +316,6 @@ forward Action FF2R_OnMenuOpenPre(int client, const char[] name);
  * @noreturn
  */
 forward void FF2R_OnMenuOpenPost(int client, const char[] name, Menu menu);
-
 /**
  * Wrapper to emit sound to one client.
  * 
