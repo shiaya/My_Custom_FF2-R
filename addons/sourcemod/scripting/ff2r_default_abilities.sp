@@ -435,6 +435,7 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
+	//Attrib_PluginLoad();
 	CustomAttrib_PluginLoad();
 	TF2Items_PluginLoad();
 	TF2U_PluginLoad();
@@ -2504,6 +2505,7 @@ void Rage_CloneAttack(int client, ConfigData cfg)
 		int owner = cfg.GetBool("die on boss death", true) ? client : -1;
 		bool allowBosses = cfg.GetBool("allow bosses", false);
 		bool lowPrio = cfg.GetBool("low prio", false);
+		bool DoubleCheck = cfg.GetBool("double check", false);
 
 		ConfigData minion = cfg.GetSection("character");
 		
@@ -2532,6 +2534,8 @@ void Rage_CloneAttack(int client, ConfigData cfg)
 
 			// +4 for the same team
 			int points = (team1 == team2) ? 4 : 0;
+			if(DoubleCheck && IsPlayerAlive(target))
+				continue;
 
 			if(IsPlayerAlive(target) && FF2R_GetClientMinion(target) != 2)
 			{
@@ -2567,7 +2571,6 @@ void Rage_CloneAttack(int client, ConfigData cfg)
 				SortCustom2D(victim, victims, CloneSorting);
 				victims = amount;
 			}
-			
 			SpawnCloneList(victim, victims, minion, owner, team1, pos, cfg);
 		}
 	}
@@ -2601,7 +2604,7 @@ void SpawnCloneList(int[][] clients, int amount, ConfigData cfg, int owner, int 
 	for(int i; i < amount; i++)
 	{
 		int client = clients[i][0];
-		
+		FF2R_SetBossData(target, null, true);
 		if(!CloneOwner[client])
 			CloneLastTeam[client] = GetClientTeam(client);
 		
